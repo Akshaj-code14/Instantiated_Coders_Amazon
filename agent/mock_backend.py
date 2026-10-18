@@ -331,7 +331,8 @@ class MockBackend:
         self, task_ids: list[str], start: datetime, end: datetime,
         budget_minutes: int | None = None,
     ) -> tuple[list[_Block], list[str]]:
-        tasks = [self._tasks[tid] for tid in task_ids if tid in self._tasks]
+        unique_ids = list(dict.fromkeys(task_ids))
+        tasks = [self._tasks[tid] for tid in unique_ids if tid in self._tasks]
         tasks.sort(key=lambda task: task.due_at)
         slots = [
             [begin, finish] for begin, finish in self._free_intervals(start, end, 15)
@@ -340,29 +341,27 @@ class MockBackend:
         unscheduled: list[str] = []
         remaining_budget = budget_minutes
         for task in tasks:
-            needed = task.estimated_minutes
+            remaining = task.estimated_minutes
             if remaining_budget is not None:
                 if remaining_budget <= 0:
                     unscheduled.append(task.id)
                     continue
-                needed = min(needed, remaining_budget)
-            placed = False
+                remaining = min(remaining, remaining_budget)
             for slot in slots:
+                if remaining <= 0:
+                    break
                 slot_len = int((slot[1] - slot[0]).total_seconds() // 60)
-                if slot_len < min(needed, 30):
+                if slot_len < min(remaining, 30):
                     continue
-                take = min(needed, slot_len)
+                take = min(remaining, slot_len)
                 begin = slot[0]
                 finish = begin + timedelta(minutes=take)
                 blocks.append(_Block(task.id, task.title, begin, finish))
                 slot[0] = finish
+                remaining -= take
                 if remaining_budget is not None:
                     remaining_budget -= take
-                if take < needed:
-                    unscheduled.append(task.id)
-                placed = True
-                break
-            if not placed:
+            if remaining > 0:
                 unscheduled.append(task.id)
         return blocks, unscheduled
 
@@ -553,7 +552,7 @@ class MockBackend:
         proposal = self._proposals.get(plan_id)
         old_blocks = self._saved.get(plan_id) or proposal.blocks
         old_payload = {block.task_id: block for block in old_blocks}
-        task_ids = [block.task_id for block in old_blocks]
+        task_ids = list(dict.fromkeys(block.task_id for block in old_blocks))
         fallback_start = min((b.start for b in old_blocks), default=self._now())
         fallback_end = max((b.end for b in old_blocks), default=self._now())
         start = (proposal.start_date if proposal and proposal.start_date

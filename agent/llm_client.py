@@ -106,22 +106,25 @@ def history_to_contents(history: Sequence[Mapping[str, Any]]) -> list[types.Cont
                 parts.append(types.Part.from_text(text=str(text)))
             for call in message.get("function_calls", []) or []:
                 signature = call.get("thought_signature")
-                part = types.Part(
+                signature_bytes = None
+                if signature:
+                    try:
+                        signature_bytes = base64.b64decode(signature)
+                    except (ValueError, TypeError):
+                        logger.warning("dropping unreadable thought_signature")
+                parts.append(types.Part(
                     function_call=types.FunctionCall(
                         name=str(call.get("name", "")),
                         args=_to_plain(call.get("args") or {}),
-                    )
-                )
-                if signature:
-                    try:
-                        part.thought_signature = base64.b64decode(signature)
-                    except (ValueError, TypeError):
-                        logger.warning("dropping unreadable thought_signature")
-                parts.append(part)
+                    ),
+                    thought_signature=signature_bytes,
+                ))
             if not parts:
                 continue
             contents.append(types.Content(role="model", parts=parts))
         elif role == "tool":
+            # Gemini expects function responses in a *user* turn; this mirrors
+            # what the SDK's own automatic function calling does.
             parts = []
             for result in message.get("results", []) or []:
                 parts.append(types.Part.from_function_response(
@@ -129,7 +132,7 @@ def history_to_contents(history: Sequence[Mapping[str, Any]]) -> list[types.Cont
                     response={"result": _to_plain(result.get("response") or {})},
                 ))
             if parts:
-                contents.append(types.Content(role="tool", parts=parts))
+                contents.append(types.Content(role="user", parts=parts))
         else:
             logger.warning("skipping history message with unknown role %r", role)
     return contents

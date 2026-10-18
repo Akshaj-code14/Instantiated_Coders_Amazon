@@ -24,7 +24,6 @@ from agent.schemas import (
     HIDDEN_TOOL_FIELDS,
     TOOL_NAMES,
     ToolArgs,
-    ToolName,
     ToolResult,
 )
 from agent.validators import (
@@ -295,6 +294,8 @@ def dispatch(
     spec = TOOL_SPECS[tool_name]
     model = spec.args_model
 
+    if raw_args is None:  # Gemini sends no arguments for a no-arg tool.
+        raw_args = {}
     if not isinstance(raw_args, dict):
         return _failure(tool_name, f"{tool_name} requires an arguments object.",
                         validation_error=True)

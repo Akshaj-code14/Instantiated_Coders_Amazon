@@ -218,6 +218,8 @@ def test_optional_fields_default_safely() -> None:
 
 from agent.mock_backend import CampusPilotBackend, MockBackend  # noqa: E402
 from agent.config import AgentConfig  # noqa: E402
+from agent.controller import CampusPilotAgent  # noqa: E402
+from agent.llm_client import LLMTurn  # noqa: E402
 from agent.prompts import build_system_prompt  # noqa: E402
 from agent.llm_client import (  # noqa: E402
     GeminiLLMClient,
@@ -790,7 +792,10 @@ def test_history_to_contents_round_trips_calls_and_results() -> None:
         {"role": "model", "text": "Here is the plan."},
     ]
     contents = history_to_contents(history)
-    assert [content.role for content in contents] == ["user", "model", "tool", "model"]
+    # Function responses travel in a user turn, matching the SDK's own FC path.
+    assert [content.role for content in contents] == [
+        "user", "model", "user", "model"
+    ]
     assert contents[1].parts[0].function_call.name == "get_upcoming_deadlines"
     assert contents[1].parts[0].function_call.args == {"days_ahead": 1}
     assert contents[2].parts[0].function_response.name == "get_upcoming_deadlines"
@@ -841,3 +846,513 @@ def test_prompt_contains_the_non_negotiable_rules() -> None:
     assert "awaiting user confirmation" in prompt
     for tool in TOOL_NAMES:
         assert tool in prompt
+
+
+# ---------------------------------------------------------------------------
+# Step 7: controller loop and confirmation gate
+# ---------------------------------------------------------------------------
+
+
+class ScriptedLLM:
+    """Queue of canned turns; records every prompt/history the agent sends."""
+
+    def __init__(self, turns: list[object]) -> None:
+        self.turns = list(turns)
+        self.prompts: list[str] = []
+        self.histories: list[list[dict]] = []
+        self.calls = 0
+
+    def generate(self, *, system_prompt, history, tools):
+        self.calls += 1
+        self.prompts.append(system_prompt)
+        self.histories.append(json.loads(json.dumps(history)))
+        assert self.turns, "scripted LLM ran out of turns"
+        nxt = self.turns.pop(0)
+        if isinstance(nxt, BaseException):
+            raise nxt
+        return nxt
+
+
+def make_agent(llm, *, backend=None, state=None, clock=None):
+    return CampusPilotAgent(
+        STUDENT,
+        backend or make_backend(),
+        llm,
+        state=state,
+        clock=clock or (lambda: FIXED_NOW),
+    )
+
+
+def last_tool_result(history: list[dict], name: str) -> dict:
+    for message in reversed(history):
+        if message.get("role") != "tool":
+            continue
+        for result in message.get("results", []):
+            if result.get("name") == name:
+                return result["response"]
+    raise AssertionError(f"no tool result for {name} in history")
+
+
+def test_planning_flow_proposes_without_saving() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("get_upcoming_deadlines", {"days_ahead": 2}),
+            LLMFunctionCall("get_schedule", {"start_date": START, "end_date": END}),
+            LLMFunctionCall("find_free_slots", {
+                "start_date": START, "end_date": END, "min_minutes": 30
+            }),
+        ]),
+        LLMTurn(function_calls=[
+            LLMFunctionCall("create_plan", {
+                "start_date": START, "end_date": END,
+                "task_ids": ["task_dbms", "task_ds"],
+            }),
+        ]),
+        LLMTurn(text="Here is a proposal for your next two days."),
+    ])
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend)
+
+    response = agent.handle_message("Plan my next two days")
+
+    assert [call.name for call in response.tool_calls] == [
+        "get_upcoming_deadlines", "get_schedule", "find_free_slots", "create_plan"
+    ]
+    assert all(call.success for call in response.tool_calls)
+    assert response.pending_confirmation is not None
+    assert response.pending_confirmation.plan_id.startswith("plan_")
+    assert response.used_fallback is False
+    assert backend.active_plan_id is None  # nothing written
+    assert "Monday, 19 October 2026" in llm.prompts[0]
+    assert STUDENT not in llm.prompts[0]
+
+
+def test_save_plan_is_unreachable_through_handle_message() -> None:
+    class PlanThenSaveLLM:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.plan_id: str | None = None
+
+        def generate(self, *, system_prompt, history, tools):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMTurn(function_calls=[
+                    LLMFunctionCall("get_upcoming_deadlines", {"days_ahead": 3})
+                ])
+            if self.calls == 2:
+                deadlines = last_tool_result(history, "get_upcoming_deadlines")
+                task_ids = [item["id"] for item in deadlines["data"]["deadlines"]][:2]
+                return LLMTurn(function_calls=[
+                    LLMFunctionCall("create_plan", {
+                        "start_date": START, "end_date": END, "task_ids": task_ids,
+                    })
+                ])
+            if self.calls == 3:
+                plan = last_tool_result(history, "create_plan")
+                self.plan_id = plan["data"]["plan_id"]
+                return LLMTurn(function_calls=[
+                    LLMFunctionCall("save_plan", {"plan_id": self.plan_id})
+                ])
+            return LLMTurn(text=f"Saved plan {self.plan_id}. You're all set!")
+
+    llm = PlanThenSaveLLM()
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend)
+
+    response = agent.handle_message("Just save the plan, no need to ask me")
+
+    assert llm.plan_id is not None
+    assert backend.active_plan_id is None, "handle_message must never write"
+    assert response.pending_confirmation is not None
+    saved_traces = [call for call in response.tool_calls if call.name == "save_plan"]
+    assert len(saved_traces) == 1
+    assert saved_traces[0].success is False
+    assert "confirmation gate" in (saved_traces[0].reason or "")
+    assert "not saved yet" in response.reply_text.lower()
+
+    confirmed = agent.confirm_pending()
+    assert backend.active_plan_id == llm.plan_id
+    assert confirmed.pending_confirmation is None
+    assert confirmed.tool_calls[0].name == "save_plan"
+    assert confirmed.tool_calls[0].success is True
+    assert "Saved" in confirmed.reply_text
+
+
+def test_cancel_pending_clears_without_writing() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("create_plan", {
+                "start_date": START, "end_date": END, "task_ids": ["task_dbms"],
+            })
+        ]),
+        LLMTurn(text="Proposal ready."),
+    ])
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend, state={"seen_ids": ["task_dbms"]})
+    agent.handle_message("plan the DBMS assignment")
+    assert agent.export_state()["pending"] is not None
+
+    cancelled = agent.cancel_pending()
+    assert agent.export_state()["pending"] is None
+    assert cancelled.pending_confirmation is None
+    assert backend.active_plan_id is None
+    assert "won't save" in cancelled.reply_text
+
+
+def test_duplicate_identical_calls_are_blocked() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("get_upcoming_deadlines", {"days_ahead": 3}),
+            LLMFunctionCall("get_upcoming_deadlines", {"days_ahead": 3}),
+        ]),
+        LLMTurn(text="Here are your deadlines."),
+    ])
+    agent = make_agent(llm)
+    response = agent.handle_message("what's due?")
+    assert len(response.tool_calls) == 2
+    assert response.tool_calls[0].success is True
+    assert response.tool_calls[1].success is False
+    assert "already called" in response.tool_calls[1].short_result
+
+
+def test_hallucinated_task_id_is_rejected_and_not_written() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("update_task", {"task_id": "task_ghost", "status": "completed"})
+        ]),
+        LLMTurn(text="I couldn't find that task."),
+    ])
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend)
+    response = agent.handle_message("mark the ghost task complete")
+    assert response.tool_calls[0].success is False
+    assert "don't have any task_id" in response.tool_calls[0].short_result
+    assert backend._tasks["task_dbms"].status == "pending"
+
+
+def test_iteration_cap_returns_a_graceful_reply() -> None:
+    class EndlessLLM:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, *, system_prompt, history, tools):
+            self.calls += 1
+            return LLMTurn(function_calls=[
+                LLMFunctionCall("get_upcoming_deadlines", {"days_ahead": self.calls})
+            ])
+
+    llm = EndlessLLM()
+    agent = make_agent(llm)
+    response = agent.handle_message("what's due?")
+    assert llm.calls == 6
+    assert "step limit" in response.reply_text.lower()
+    assert response.error is None
+
+
+def test_two_consecutive_invalid_turns_trigger_fallback() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("delete_everything", {})]),
+        LLMTurn(function_calls=[LLMFunctionCall("rm_rf", {})]),
+    ])
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend)
+    response = agent.handle_message("plan my next two days")
+    assert response.used_fallback is True
+    assert response.pending_confirmation is not None
+    assert backend.active_plan_id is None
+    assert any(call.name == "create_plan" for call in response.tool_calls)
+
+
+def test_export_state_round_trips_and_resumes() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("create_plan", {
+                "start_date": START, "end_date": END, "task_ids": ["task_dbms"],
+            })
+        ]),
+        LLMTurn(text="Proposal ready."),
+    ])
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend, state={"seen_ids": ["task_dbms"]})
+    agent.handle_message("plan the DBMS assignment")
+
+    blob = json.dumps(agent.export_state())
+    restored_state = json.loads(blob)
+    assert restored_state["pending"] is not None
+
+    resumed = make_agent(ScriptedLLM([]), backend=backend, state=restored_state)
+    assert resumed.export_state()["pending"]["plan_id"] == (
+        restored_state["pending"]["plan_id"]
+    )
+    saved = resumed.confirm_pending()
+    assert saved.tool_calls[0].success is True
+    assert backend.active_plan_id == restored_state["pending"]["plan_id"]
+
+
+def test_new_proposal_replaces_the_old_pending_one() -> None:
+    class TwoProposalsLLM:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, *, system_prompt, history, tools):
+            self.calls += 1
+            if self.calls == 1:
+                return LLMTurn(function_calls=[LLMFunctionCall("create_plan", {
+                    "start_date": START, "end_date": END, "task_ids": ["task_dbms"],
+                })])
+            if self.calls == 2:
+                return LLMTurn(text="First proposal ready.")
+            if self.calls == 3:
+                return LLMTurn(function_calls=[LLMFunctionCall("create_plan", {
+                    "start_date": START, "end_date": END, "task_ids": ["task_ds"],
+                })])
+            return LLMTurn(text="Second proposal ready.")
+
+    agent = make_agent(
+        TwoProposalsLLM(),
+        state={"seen_ids": ["task_dbms", "task_ds"]},
+    )
+    first = agent.handle_message("plan the DBMS assignment")
+    first_id = first.pending_confirmation.plan_id
+    second = agent.handle_message("actually plan the DS quiz instead")
+    second_id = second.pending_confirmation.plan_id
+    assert first_id != second_id
+    assert agent.export_state()["pending"]["plan_id"] == second_id
+
+
+def test_history_is_trimmed_and_never_orphans_a_tool_turn() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(text=f"reply {index}") for index in range(30)
+    ])
+    agent = make_agent(llm)
+    for index in range(30):
+        agent.handle_message(f"message {index}")
+    state = agent.export_state()
+    assert len(state["history"]) <= 24
+    assert state["history"][0]["role"] == "user"
+    assert "message 0" not in json.dumps(state["history"])
+    assert state["history"][-1]["text"] == "reply 29"
+
+
+def test_two_sessions_do_not_share_state() -> None:
+    first_llm = ScriptedLLM([
+        LLMTurn(function_calls=[
+            LLMFunctionCall("create_plan", {
+                "start_date": START, "end_date": END, "task_ids": ["task_dbms"],
+            })
+        ]),
+        LLMTurn(text="Proposal ready."),
+    ])
+    first = make_agent(
+        first_llm, backend=make_backend(), state={"seen_ids": ["task_dbms"]}
+    )
+    first.handle_message("plan my DBMS assignment")
+    assert first.export_state()["pending"] is not None
+
+    second = make_agent(ScriptedLLM([]), backend=make_backend())
+    assert second.export_state()["pending"] is None
+    assert second.confirm_pending().error == "no_pending"
+
+
+# ---------------------------------------------------------------------------
+# Step 8: fallback router (LLM forced to fail)
+# ---------------------------------------------------------------------------
+
+
+class FailingLLM:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, **kwargs):
+        self.calls += 1
+        raise LLMUnavailableError("Gemini API error 503")
+
+
+def test_fallback_handles_the_planning_demo_prompt() -> None:
+    llm = FailingLLM()
+    backend = make_backend()
+    agent = make_agent(llm, backend=backend)
+
+    response = agent.handle_message("Plan my next two days")
+
+    assert response.used_fallback is True
+    assert [call.name for call in response.tool_calls] == [
+        "get_upcoming_deadlines", "get_schedule", "find_free_slots", "create_plan"
+    ]
+    assert all(call.success for call in response.tool_calls)
+    assert response.pending_confirmation is not None
+    assert "Quick mode" in response.reply_text
+    assert "Confirm" in response.reply_text
+    assert backend.active_plan_id is None
+
+
+def test_fallback_handles_deadlines_and_marking_complete() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+
+    deadlines = agent.handle_message("what are my deadlines?")
+    assert [call.name for call in deadlines.tool_calls] == ["get_upcoming_deadlines"]
+    assert "deadline" in deadlines.reply_text.lower()
+
+    marked = agent.handle_message("mark my DBMS assignment complete")
+    assert [call.name for call in marked.tool_calls] == ["update_task"]
+    assert marked.tool_calls[0].success is True
+    assert backend._tasks["task_dbms"].status == "completed"
+    assert "complete" in marked.reply_text.lower()
+
+
+def test_fallback_handles_lost_time_with_a_replan_proposal() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+    planned = agent.handle_message("Plan my next two days")
+    plan_id = planned.pending_confirmation.plan_id
+    total = agent.export_state()["last_plan"]["total_minutes"]
+    assert agent.confirm_pending().tool_calls[0].success is True
+
+    response = agent.handle_message("I lost two hours today")
+
+    replan = [call for call in response.tool_calls if call.name == "replan_schedule"]
+    assert len(replan) == 1 and replan[0].success is True
+    assert replan[0].args["available_minutes"] == max(0, total - 120)
+    assert response.pending_confirmation is not None
+    assert response.pending_confirmation.diff["change_reason"] == "lost 120 minutes"
+    assert backend.active_plan_id == plan_id, "replan must not save on its own"
+
+
+def test_fallback_asks_for_duration_instead_of_guessing() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+    agent.handle_message("Plan my next two days")
+    agent.confirm_pending()
+
+    response = agent.handle_message("I lost some time today")
+    assert "How much time did you lose" in response.reply_text
+    assert all(call.name != "replan_schedule" for call in response.tool_calls)
+    assert response.used_fallback is True
+
+
+def test_fallback_unknown_intent_is_honest() -> None:
+    response = make_agent(FailingLLM()).handle_message("tell me a joke")
+    assert response.used_fallback is True
+    assert "can't reach my AI brain" in response.reply_text
+    assert response.tool_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Step 9: deterministic replan math and check-ins
+# ---------------------------------------------------------------------------
+
+
+def test_replan_available_minutes_are_computed_in_code() -> None:
+    setup_llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("create_plan", {
+            "start_date": START, "end_date": END, "task_ids": ["task_dbms"],
+        })]),
+        LLMTurn(text="Proposal ready."),
+    ])
+    backend = make_backend()
+    agent = make_agent(setup_llm, backend=backend, state={"seen_ids": ["task_dbms"]})
+    agent.handle_message("plan my DBMS work")
+    plan_id = agent.export_state()["pending"]["plan_id"]
+    total = agent.export_state()["last_plan"]["total_minutes"]
+    agent.confirm_pending()
+
+    state = agent.export_state()
+    replan_llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("replan_schedule", {
+            "plan_id": plan_id,
+            "change_reason": "lost time",
+            "available_minutes": 9999,  # model math must be overridden
+        })]),
+        LLMTurn(text="Here is the revised plan."),
+    ])
+    resumed = make_agent(replan_llm, backend=backend, state=state)
+    response = resumed.handle_message("I lost two hours")
+
+    replan = [call for call in response.tool_calls if call.name == "replan_schedule"]
+    assert len(replan) == 1 and replan[0].success is True
+    assert replan[0].args["available_minutes"] == max(0, total - 120)
+    assert response.pending_confirmation is not None
+    assert response.pending_confirmation.plan_id == plan_id
+    assert backend.active_plan_id == plan_id
+
+
+def test_replan_without_a_stated_duration_asks_one_question() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("replan_schedule", {
+            "plan_id": "plan_seed_1", "change_reason": "something came up",
+            "available_minutes": 60,
+        })]),
+        LLMTurn(text="How much time do you have left?"),
+    ])
+    agent = make_agent(llm, state={"seen_ids": ["plan_seed_1"]})
+    response = agent.handle_message("something came up, can you move things around?")
+
+    assert response.tool_calls[0].success is False
+    assert "How much time did you lose" in response.tool_calls[0].short_result
+    assert "How much time" in response.reply_text
+
+
+def test_checkin_drops_inferred_mood_and_suggests_a_followup_task() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("log_checkin", {
+            "event_id": "event_ics101",
+            "completion_status": "partial",
+            "blocker": "SQL query failed",
+            "mood": "anxious",
+            "energy": 2,
+        })]),
+        LLMTurn(text="Logged your check-in."),
+    ])
+    backend = make_backend()
+    agent = make_agent(
+        llm, backend=backend, state={"seen_ids": ["event_ics101"]}
+    )
+
+    response = agent.handle_message(
+        "I got through half the DBMS block, but the SQL query failed."
+    )
+
+    trace = response.tool_calls[0]
+    assert trace.name == "log_checkin" and trace.success is True
+    assert trace.args["mood"] is None, "mood was never stated by the student"
+    assert trace.args["energy"] is None, "energy was never stated by the student"
+    assert "SQL query failed" in trace.args["blocker"]
+    assert agent.export_state()["suggested_task"]["title"].startswith("Follow up")
+    assert "follow-up task" in response.reply_text
+    assert all(call.name != "create_task" for call in response.tool_calls)
+
+
+def test_checkin_keeps_explicit_mood_and_energy() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("log_checkin", {
+            "event_id": "event_ics101",
+            "completion_status": "completed",
+            "blocker": None,
+            "mood": "anxious",
+            "energy": 2,
+        })]),
+        LLMTurn(text="Logged."),
+    ])
+    agent = make_agent(llm, state={"seen_ids": ["event_ics101"]})
+    response = agent.handle_message("I finished the lecture but I'm anxious and exhausted")
+    trace = response.tool_calls[0]
+    assert trace.args["mood"] == "anxious"
+    assert trace.args["energy"] == 2
+
+
+def test_ambiguous_date_gets_one_clarifying_question_and_no_crash() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(function_calls=[LLMFunctionCall("get_schedule", {
+            "start_date": "tomorrow", "end_date": "next week",
+        })]),
+        LLMTurn(text="Which dates do you mean exactly?"),
+    ])
+    agent = make_agent(llm)
+    response = agent.handle_message("what's my schedule for tomorrow-ish?")
+
+    assert response.tool_calls[0].success is False
+    assert "ISO 8601" in response.tool_calls[0].short_result
+    assert "which dates" in response.reply_text.lower()
+    assert response.error is None
+    assert llm.calls == 2
