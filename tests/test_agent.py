@@ -488,6 +488,7 @@ def test_declarations_carry_enums_and_required_fields() -> None:
     assert "query" in schemas["search_notices"]["required"]
     assert "student_id" not in schemas["search_notices"]["required"]
     assert schemas["get_schedule"]["properties"]["start_date"]["type"] == "string"
+    assert "required" not in schemas["get_student_context"]
 
 
 def test_unknown_tool_fails_cleanly() -> None:

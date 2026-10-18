@@ -163,7 +163,9 @@ def _clean_schema(node: Any) -> Any:
                 if name not in HIDDEN_TOOL_FIELDS
             }
         elif key == "required":
-            cleaned[key] = [name for name in value if name not in HIDDEN_TOOL_FIELDS]
+            required = [name for name in value if name not in HIDDEN_TOOL_FIELDS]
+            if required:  # an empty `required` list is needless API surface
+                cleaned[key] = required
         elif key in {"items"}:
             cleaned[key] = _clean_schema(value)
         else:
