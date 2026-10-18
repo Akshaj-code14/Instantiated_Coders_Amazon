@@ -11,6 +11,7 @@ swap in a scripted fake in tests.
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -38,11 +39,26 @@ class LLMUnavailableError(RuntimeError):
     """Raised for every LLM failure: network, quota, safety, empty response."""
 
     def __init__(self, message: str, *, retryable: bool = False,
-                 cause: BaseException | None = None) -> None:
+                 cause: BaseException | None = None,
+                 detail: str | None = None) -> None:
         super().__init__(message)
         self.retryable = retryable
         self.cause = cause
+        # Verbatim SDK text for debugging (status, response body). Never secrets;
+        # the UI shows `str(exc)` and keeps this for the live check / logs.
+        self.detail = detail
         self.user_message = _FRIENDLY_UNAVAILABLE
+
+
+def _api_error_detail(exc: errors.APIError) -> str:
+    parts = [f"{type(exc).__name__} (code={getattr(exc, 'code', None)}): {exc}"]
+    response_json = getattr(exc, "response_json", None)
+    if response_json is not None:
+        try:
+            parts.append(json.dumps(response_json, ensure_ascii=False))
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            parts.append(str(response_json))
+    return "\n".join(parts)
 
 
 @dataclass(frozen=True)
@@ -233,12 +249,14 @@ class GeminiLLMClient:
                 retryable = status in RETRYABLE_STATUS or (
                     isinstance(status, int) and status >= 500
                 )
+                detail = _api_error_detail(exc)
                 logger.warning(
-                    "Gemini API error (status=%s, attempt=%s/%s)",
-                    status, attempt + 1, attempts,
+                    "Gemini API error (status=%s, attempt=%s/%s): %s",
+                    status, attempt + 1, attempts, detail,
                 )
                 last_error = LLMUnavailableError(
-                    f"Gemini API error {status}", retryable=retryable, cause=exc
+                    f"Gemini API error {status}", retryable=retryable,
+                    cause=exc, detail=detail,
                 )
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 retryable = True
@@ -247,7 +265,8 @@ class GeminiLLMClient:
                     type(exc).__name__, attempt + 1, attempts,
                 )
                 last_error = LLMUnavailableError(
-                    "Gemini request timed out", retryable=True, cause=exc
+                    "Gemini request timed out", retryable=True, cause=exc,
+                    detail=f"{type(exc).__name__}: {exc}",
                 )
             except Exception as exc:  # noqa: BLE001 - nothing may leak upward
                 logger.exception("unexpected Gemini client failure")
@@ -261,6 +280,9 @@ class GeminiLLMClient:
             self._sleep(delay)
 
         assert last_error is not None
+        # Chain the SDK exception so its verbatim message/body is visible.
+        if last_error.cause is not None:
+            raise last_error from last_error.cause
         raise last_error
 
     # -- response parsing ----------------------------------------------

@@ -36,7 +36,8 @@ _CRISIS_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\bno\s+reason\s+to\s+live\b",
         r"\bbetter\s+off\s+dead\b",
         r"\boverdose\b",
-        r"\b(?:can'?t|cannot)\s+go\s+on\s+living\b",
+        r"\b(?:can'?t|cannot)\s+go\s+on\b",
+        r"\b(?:can'?t|cannot)\s+keep\s+going\b",
     )
 )
 

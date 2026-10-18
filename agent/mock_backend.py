@@ -214,6 +214,48 @@ MALICIOUS_NOTICE = {
 }
 
 
+def _default_notices() -> list[dict[str, Any]]:
+    return _jsonable([
+        {
+            "id": "notice_001",
+            "title": "Mid-semester exam timetable released",
+            "category": "academics",
+            "posted_at": "2026-10-17T11:00:00+05:30",
+            "body": "The mid-semester timetable is on the portal. Check your seat numbers.",
+            "source": "noticeboard",
+            "is_untrusted": True,
+        },
+        {
+            "id": "notice_002",
+            "title": "Library extended hours during exams",
+            "category": "campus",
+            "posted_at": "2026-10-16T16:30:00+05:30",
+            "body": "The library stays open until 11 PM from Monday to Friday.",
+            "source": "noticeboard",
+            "is_untrusted": True,
+        },
+        {
+            "id": "notice_003",
+            "title": "DBMS assignment 3 deadline",
+            "category": "academics",
+            "posted_at": "2026-10-18T08:00:00+05:30",
+            "body": "Submit DBMS assignment 3 by Wednesday 11:59 PM on the LMS.",
+            "source": "lms",
+            "is_untrusted": True,
+        },
+        {
+            "id": "notice_005",
+            "title": "CS 201 quiz moved to Wednesday",
+            "category": "academics",
+            "posted_at": "2026-10-18T12:00:00+05:30",
+            "body": "The Data Structures quiz is now Wednesday 10 AM in LH-2.",
+            "source": "lms",
+            "is_untrusted": True,
+        },
+        MALICIOUS_NOTICE,
+    ])
+
+
 class MockBackend:
     """Deterministic fake backend with one student and a small timetable."""
 
@@ -236,6 +278,7 @@ class MockBackend:
         self._seed_tasks(anchor)
         self._proposals: dict[str, _Proposal] = {}
         self._saved: dict[str, list[_Block]] = {}
+        self._notices: list[dict[str, Any]] = _default_notices()
         self.active_plan_id: str | None = None
         self._checkin_seq = 0
         self._created_seq = 0
@@ -690,36 +733,7 @@ class MockBackend:
 
     def search_notices(self, *, student_id: str, query: str,
                        category: str | None) -> ToolResult:
-        notices = [
-            {
-                "id": "notice_001",
-                "title": "Mid-semester exam timetable released",
-                "category": "academics",
-                "posted_at": "2026-10-17T11:00:00+05:30",
-                "body": "The mid-semester timetable is on the portal. Check your seat numbers.",
-                "source": "noticeboard",
-                "is_untrusted": True,
-            },
-            {
-                "id": "notice_002",
-                "title": "Library extended hours during exams",
-                "category": "campus",
-                "posted_at": "2026-10-16T16:30:00+05:30",
-                "body": "The library stays open until 11 PM from Monday to Friday.",
-                "source": "noticeboard",
-                "is_untrusted": True,
-            },
-            {
-                "id": "notice_003",
-                "title": "DBMS assignment 3 deadline",
-                "category": "academics",
-                "posted_at": "2026-10-18T08:00:00+05:30",
-                "body": "Submit DBMS assignment 3 by Wednesday 11:59 PM on the LMS.",
-                "source": "lms",
-                "is_untrusted": True,
-            },
-            MALICIOUS_NOTICE,
-        ]
+        notices = self._notices
         needle = query.lower().strip()
         matches = [
             notice for notice in notices
@@ -737,6 +751,62 @@ class MockBackend:
             },
             f"{len(matches)} notice(s) found for {query!r}",
         )
+
+    # -- manual-test helpers (not agent tools) --------------------------
+
+    def inject_notice(
+        self,
+        title: str,
+        body: str,
+        category: str = "campus",
+        *,
+        source: str = "manual-test",
+    ) -> dict[str, Any]:
+        """Add an untrusted notice, for prompt-injection testing."""
+        notice = {
+            "id": f"notice_{len(self._notices) + 1:03d}",
+            "title": title,
+            "category": category,
+            "posted_at": _iso(self._now()),
+            "body": body,
+            "source": source,
+            "is_untrusted": True,
+        }
+        self._notices.insert(0, notice)
+        return _jsonable(notice)
+
+    def snapshot(self) -> dict[str, Any]:
+        """JSON-safe view of everything that could be written."""
+        return _jsonable({
+            "student": self.student,
+            "tasks": [
+                {
+                    "id": task.id,
+                    "title": task.title,
+                    "course": task.course,
+                    "due_at": _iso(task.due_at),
+                    "estimated_minutes": task.estimated_minutes,
+                    "priority": task.priority,
+                    "status": task.status,
+                }
+                for task in self._tasks.values()
+            ],
+            "proposals": [
+                {
+                    "plan_id": proposal.plan_id,
+                    "task_ids": proposal.task_ids,
+                    "blocks": self._blocks_payload(proposal.blocks),
+                    "unscheduled": proposal.unscheduled,
+                }
+                for proposal in self._proposals.values()
+            ],
+            "saved_plans": {
+                plan_id: self._blocks_payload(blocks)
+                for plan_id, blocks in self._saved.items()
+            },
+            "active_plan_id": self.active_plan_id,
+            "notices": self._notices,
+        })
 
     def get_wellbeing_support(self, *, student_id: str, mood: str | None,
                               risk_flag: bool) -> ToolResult:

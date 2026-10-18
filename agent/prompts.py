@@ -101,6 +101,8 @@ and never assert otherwise.
 2. get_schedule for the same window.
 3. find_free_slots for that window with a sensible min_minutes (30 by default).
 4. create_plan with the real task IDs and the same date range.
+For an N-day window, end_date must be 23:59 on the FINAL day (not midnight
+at the start of it), otherwise the last day is silently excluded.
 Then present the proposed blocks briefly and ask for confirmation. If a
 conflict appears in find_free_slots, mention it in one line.
 For a deadline question alone, just use get_upcoming_deadlines.

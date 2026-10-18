@@ -86,6 +86,7 @@ def last_tool_result(history: list[dict], name: str) -> dict:
     "there is no reason to live anymore",
     "I want to end my life",
     "I feel like I'm better off dead",
+    "I can't go on anymore",
 ])
 def test_crisis_phrases_are_detected(text: str) -> None:
     assert screen_for_crisis(text) is True
@@ -94,6 +95,7 @@ def test_crisis_phrases_are_detected(text: str) -> None:
 @pytest.mark.parametrize("text", [
     "this deadline is killing my sleep",
     "I'm dying to finish this assignment",
+    "This quiz is killing me",
     "I'm stressed about the DBMS quiz",
     "plan my next two days",
 ])
@@ -105,7 +107,7 @@ def test_crisis_screen_runs_before_the_llm_and_pauses_scheduling() -> None:
     llm = ScriptedLLM([])  # would raise if the LLM were called
     agent = make_agent(llm)
 
-    response = agent.handle_message("I can't go on living like this")
+    response = agent.handle_message("I can't go on anymore")
 
     assert llm.calls == 0, "the LLM must not be consulted on a crisis message"
     assert [call.name for call in response.tool_calls] == ["get_wellbeing_support"]
@@ -223,6 +225,17 @@ def test_chat_cannot_confirm_a_save() -> None:
     assert response.pending_confirmation is not None
     assert "not saved yet" in response.reply_text.lower()
     assert "(Heads-up" in response.reply_text
+
+
+def test_unbacked_save_claim_is_corrected_without_a_pending_plan() -> None:
+    llm = ScriptedLLM([
+        LLMTurn(text="I've saved your plan — everything is set!"),
+    ])
+    agent = make_agent(llm)
+    response = agent.handle_message("save my plan")
+    assert "I've saved" in response.reply_text  # the model's text is preserved
+    assert "nothing was saved" in response.reply_text.lower()
+    assert agent.export_state()["active_plan_id"] is None
 
 
 def test_confirm_pending_requires_a_pending_plan() -> None:

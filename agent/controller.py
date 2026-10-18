@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Mapping
 
 from pydantic import ValidationError
@@ -43,7 +43,9 @@ from agent.schemas import (
 from agent.tool_registry import DispatchOutcome, build_tools, dispatch
 from agent.validators import (
     SeenIds,
+    ToolValidationError,
     collect_ids,
+    parse_aware_datetime,
     parse_duration_minutes,
     to_iso,
     validate_student_id,
@@ -136,7 +138,7 @@ class CampusPilotAgent:
 
         try:
             reply = self._run_loop(trace)
-            reply = self._guard_saved_claim(reply)
+            reply = self._guard_saved_claim(reply, trace)
             reply = self._add_followup_suggestion(reply, trace)
             self._finish_reply(reply)
             return AgentResponse(
@@ -364,7 +366,7 @@ class CampusPilotAgent:
             )
             reply = result.reply_text
 
-        reply = self._guard_saved_claim(reply)
+        reply = self._guard_saved_claim(reply, trace)
         self._finish_reply(reply)
         return AgentResponse(
             reply_text=reply,
@@ -549,6 +551,23 @@ class CampusPilotAgent:
         if not isinstance(args, dict):
             return args
         prepared = dict(args)
+        if name in ("get_schedule", "find_free_slots", "create_plan"):
+            raw_end = prepared.get("end_date")
+            if isinstance(raw_end, str):
+                try:
+                    end = parse_aware_datetime(raw_end, "end_date")
+                except ToolValidationError:
+                    end = None  # let schema validation produce the date message
+                if end is not None and end < self._now() - timedelta(days=1):
+                    return ToolResult(
+                        success=False,
+                        tool_name=name,
+                        data={},
+                        message=(
+                            "That date range is in the past, so there is nothing "
+                            "to schedule. What upcoming dates should I use?"
+                        ),
+                    )
         if name == "replan_schedule":
             duration = parse_duration_minutes(self._turn_text)
             if duration is None:
@@ -761,19 +780,29 @@ class CampusPilotAgent:
             prefs=context.get("prefs") or {},
         )
 
-    def _guard_saved_claim(self, reply: str) -> str:
-        """Never let text alone assert a save that did not happen."""
-        if not self._state.get("pending"):
+    def _guard_saved_claim(self, reply: str,
+                           trace: list[ToolCallTrace]) -> str:
+        """Text alone can never assert a save: require a successful tool call."""
+        saved_for_real = any(
+            call.name == "save_plan" and call.success for call in trace
+        )
+        if saved_for_real:
             return reply
         lowered = reply.lower()
         if any(phrase in lowered for phrase in _SAVED_NEGATIONS):
             return reply
-        if _SAVED_CLAIM_RE.search(reply):
+        if not _SAVED_CLAIM_RE.search(reply):
+            return reply
+        if self._state.get("pending"):
             return (
                 reply.rstrip()
                 + "\n\n(Heads-up: it is not saved yet — press Confirm and I'll save it.)"
             )
-        return reply
+        return (
+            reply.rstrip()
+            + "\n\n(Heads-up: nothing was saved. Ask me to plan first, then "
+            "confirm the proposal.)"
+        )
 
     def _normalise_state(self, state: Mapping[str, Any] | None) -> dict[str, Any]:
         if state is None:
