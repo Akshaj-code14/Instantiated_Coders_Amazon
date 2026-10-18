@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from typing import Any
 
@@ -40,7 +41,7 @@ class OfflineLLM:
 
 def _build_agent(offline: bool) -> tuple[CampusPilotAgent, MockBackend]:
     config = load_config()
-    backend = MockBackend(now=None)
+    backend = MockBackend()
     if offline or not config.gemini_api_key:
         llm: Any = OfflineLLM()
         mode = "fallback (rule-based)"
@@ -89,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # The demo narrates failures itself; keep raw log lines out of the output.
+    logging.getLogger("agent").setLevel(logging.ERROR)
     agent, backend = _build_agent(args.offline)
     responses: dict[str, AgentResponse] = {}
 
