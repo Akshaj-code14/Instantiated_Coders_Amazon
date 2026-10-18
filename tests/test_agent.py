@@ -1260,6 +1260,23 @@ def test_fallback_unknown_intent_is_honest() -> None:
     assert response.tool_calls == []
 
 
+def test_fallback_never_saves_from_chat_text() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+
+    nothing = agent.handle_message("save my plan")
+    assert nothing.tool_calls == []
+    assert "nothing to save" in nothing.reply_text.lower()
+
+    planned = agent.handle_message("plan my next two days")
+    assert planned.pending_confirmation is not None
+    asked = agent.handle_message("save my plan")
+    assert asked.tool_calls == []
+    assert "Press Confirm" in asked.reply_text
+    assert backend.active_plan_id is None
+    assert agent.export_state()["pending"] is not None
+
+
 # ---------------------------------------------------------------------------
 # Step 9: deterministic replan math and check-ins
 # ---------------------------------------------------------------------------

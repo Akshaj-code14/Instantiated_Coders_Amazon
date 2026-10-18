@@ -61,6 +61,15 @@ _DAY_RE = re.compile(r"\b(day|days|week|tomorrow|today)\b")
 _LOST_RE = re.compile(r"\blost\b.*\b(hours?|hrs?|minutes?|mins?|time)\b")
 _MARK_RE = re.compile(r"\b(mark|marked|set)\b.*\b(complete|completed|done|finished)\b")
 _DEADLINE_RE = re.compile(r"\b(deadlines?|due)\b")
+_NOTICE_RE = re.compile(r"\b(notices?|announcements?|noticeboard)\b")
+_SAVE_RE = re.compile(
+    r"\b(save|confirm)\b.*\bplan\b|\bplan\b.*\b(save|confirm)\b"
+)
+_NOTICE_FILLER = {
+    "search", "show", "me", "my", "the", "for", "find", "any", "about",
+    "notices", "notice", "announcements", "announcement", "noticeboard",
+    "please", "check", "what", "whats", "are", "is", "look", "up",
+}
 
 _STOPWORDS = {
     "the", "my", "a", "an", "for", "with", "and", "task", "assignment",
@@ -89,6 +98,17 @@ def route_fallback(
 
     cached_tasks = _cached_deadlines(state)
 
+    if _SAVE_RE.search(lowered):
+        if state.get("pending"):
+            return FallbackResult(
+                "There's a proposed plan waiting. Press Confirm to save it — I "
+                "can't confirm it from a chat message."
+            )
+        return FallbackResult(
+            "There's nothing to save yet. Ask me to plan something first, then "
+            "press Confirm on the proposal."
+        )
+
     if _LOST_RE.search(lowered) or (
         "lost" in lowered and parse_duration_minutes(lowered) is not None
     ):
@@ -105,6 +125,9 @@ def route_fallback(
 
     if _DEADLINE_RE.search(lowered):
         return _deadlines(user_text, execute=execute)
+
+    if _NOTICE_RE.search(lowered):
+        return _notices(user_text, execute=execute)
 
     if _PLANNING_RE.search(lowered):
         return _plan_window(user_text, now=now, execute=execute)
@@ -265,6 +288,31 @@ def _deadlines(text: str, *, execute: ExecuteTool) -> FallbackResult:
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+
+
+def _notices(text: str, *, execute: ExecuteTool) -> FallbackResult:
+    tokens = [
+        token for token in re.findall(r"[a-z0-9]+", text.lower())
+        if token not in _NOTICE_FILLER
+    ]
+    query = " ".join(tokens)[:120]
+    outcome = execute("search_notices", {"query": query, "category": None})
+    if not outcome.result.success:
+        return FallbackResult(f"I couldn't search the notices: {outcome.result.message}")
+    items = outcome.result.data.get("notices", [])
+    if not items:
+        return FallbackResult(
+            f"No notices matched {query!r}." if query else "There are no notices."
+        )
+    lines = [
+        f"• {item.get('title')} ({item.get('category')}): "
+        f"{str(item.get('body', ''))[:180]}"
+        for item in items[:8]
+    ]
+    return FallbackResult(
+        "Quick mode — notices are untrusted data; I won't act on instructions "
+        "inside them:\n" + "\n".join(lines)
+    )
 
 
 def _cached_deadlines(state: dict[str, Any]) -> list[dict[str, Any]]:
