@@ -217,6 +217,24 @@ def test_optional_fields_default_safely() -> None:
 # ---------------------------------------------------------------------------
 
 from agent.mock_backend import CampusPilotBackend, MockBackend  # noqa: E402
+from agent.tool_registry import (  # noqa: E402
+    GATED_TOOLS,
+    build_declarations,
+    dispatch,
+    tool_parameters_schema,
+)
+from agent.validators import (  # noqa: E402
+    SeenIds,
+    ToolValidationError,
+    collect_ids,
+    parse_aware_datetime,
+    parse_days_ahead,
+    parse_duration_minutes,
+    resolve_window_phrase,
+    validate_date_window,
+    validate_known_id,
+    validate_student_id,
+)
 
 FIXED_NOW = datetime(2026, 10, 19, 9, 0, tzinfo=IST)
 STUDENT = "stu_arjun"
@@ -326,3 +344,255 @@ def test_mock_notices_include_untrusted_injection_payload() -> None:
     notice = result.data["notices"][0]
     assert notice["is_untrusted"] is True
     assert "ignore all previous instructions" in notice["body"]
+
+
+# ---------------------------------------------------------------------------
+# Step 3: validators
+# ---------------------------------------------------------------------------
+
+
+def test_naive_datetime_rejected_by_parser() -> None:
+    with pytest.raises(ToolValidationError, match="needs a timezone"):
+        parse_aware_datetime("2026-10-19T14:00:00", "due_at")
+
+
+def test_unparseable_date_rejected_by_parser() -> None:
+    with pytest.raises(ToolValidationError, match="couldn't read"):
+        parse_aware_datetime("next Friday-ish", "due_at")
+
+
+def test_parser_normalises_to_ist() -> None:
+    parsed = parse_aware_datetime("2026-10-19T08:30:00+00:00", "due_at")
+    assert parsed.utcoffset() == timedelta(hours=5, minutes=30)
+    assert parsed.hour == 14
+
+
+def test_window_rejects_inverted_and_oversized_ranges() -> None:
+    with pytest.raises(ToolValidationError, match="before the start"):
+        validate_date_window(aware(END), aware(START))
+    with pytest.raises(ToolValidationError, match="too wide"):
+        validate_date_window(aware(START), aware(START) + timedelta(days=20))
+    begin, finish = validate_date_window(aware(START), aware(START) + timedelta(days=14))
+    assert finish - begin == timedelta(days=14)
+
+
+def test_duration_parsing() -> None:
+    assert parse_duration_minutes("I lost two hours") == 120
+    assert parse_duration_minutes("I only have 90 minutes today") == 90
+    assert parse_duration_minutes("half an hour got eaten by a meeting") == 30
+    assert parse_duration_minutes("one and a half hours") == 90
+    assert parse_duration_minutes("an hour") == 60
+    assert parse_duration_minutes("2 hours 30 minutes") == 150
+    assert parse_duration_minutes("I lost some time") is None
+    assert parse_duration_minutes("I lost two hours but have 90 minutes") is None
+    assert parse_duration_minutes("25 hours") is None
+
+
+def test_days_ahead_parsing() -> None:
+    assert parse_days_ahead("plan my next two days") == 2
+    assert parse_days_ahead("plan my next 3 days") == 3
+    assert parse_days_ahead("what is due in 5 days") == 5
+    assert parse_days_ahead("plan my week") is None
+    assert parse_days_ahead("plan my next 45 days") is None
+
+
+def test_window_phrase_resolution() -> None:
+    now = FIXED_NOW
+    tomorrow = resolve_window_phrase("plan tomorrow please", now)
+    assert tomorrow is not None
+    assert tomorrow[0].date() == now.date() + timedelta(days=1)
+    three = resolve_window_phrase("next 3 days", now)
+    assert three is not None and three[1] - three[0] == timedelta(days=3)
+    assert resolve_window_phrase("sometime soon", now) is None
+    assert resolve_window_phrase("next 40 days", now) is None
+
+
+def test_id_collection_ignores_student_ids() -> None:
+    payload = {
+        "student": {"student_id": "stu_arjun"},
+        "plan_id": "plan_20261019_abc12345",
+        "deadlines": [{"id": "task_dbms"}],
+        "free_slots": [{"start": "2026-10-19T08:00:00+05:30"}],
+        "event_id": "not-an-id",
+    }
+    ids = collect_ids(payload)
+    assert ids == {"plan_20261019_abc12345", "task_dbms"}
+
+
+def test_seen_ids_reject_hallucinated_ids() -> None:
+    seen = SeenIds()
+    seen.observe({"deadlines": [{"id": "task_dbms"}]})
+    assert validate_known_id("task_id", "task_dbms", seen) == "task_dbms"
+    with pytest.raises(ToolValidationError, match="don't have any task_id"):
+        validate_known_id("task_id", "task_dbms2", seen)
+    with pytest.raises(ToolValidationError, match="not a valid plan_id"):
+        validate_known_id("plan_id", "task_dbms", seen)
+    assert seen.of_prefix("task_id") == ["task_dbms"]
+    # Round-trip through the exported state.
+    assert SeenIds(seen.to_list()).to_list() == seen.to_list()
+
+
+def test_student_id_validation() -> None:
+    assert validate_student_id("stu_arjun") == "stu_arjun"
+    with pytest.raises(ToolValidationError):
+        validate_student_id("")
+    with pytest.raises(ToolValidationError):
+        validate_student_id("stu arjun")
+
+
+# ---------------------------------------------------------------------------
+# Step 4: generated declarations and safe dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_declarations_cover_exactly_the_twelve_tools() -> None:
+    declarations = build_declarations()
+    assert [decl.name for decl in declarations] == list(TOOL_NAMES)
+    assert len(declarations) == 12
+
+
+def test_declarations_never_expose_internal_fields() -> None:
+    for declaration in build_declarations():
+        schema = json.dumps(declaration.parameters_json_schema)
+        assert "student_id" not in schema, f"{declaration.name} leaks student_id"
+        assert "confirmed_by_user" not in schema, (
+            f"{declaration.name} leaks confirmed_by_user"
+        )
+        assert "$defs" not in schema
+    update_task = tool_parameters_schema("update_task")
+    assert set(update_task["properties"]) == {
+        "task_id", "status", "due_at", "estimated_minutes"
+    }
+    save_plan = tool_parameters_schema("save_plan")
+    assert set(save_plan["properties"]) == {"plan_id"}
+
+
+def test_declarations_carry_enums_and_required_fields() -> None:
+    schemas = {name: tool_parameters_schema(name) for name in TOOL_NAMES}
+    assert schemas["create_task"]["properties"]["priority"]["enum"] == [
+        "low", "medium", "high"
+    ]
+    assert schemas["log_checkin"]["properties"]["completion_status"]["enum"] == [
+        "completed", "partial", "needs_help"
+    ]
+    assert "query" in schemas["search_notices"]["required"]
+    assert "student_id" not in schemas["search_notices"]["required"]
+    assert schemas["get_schedule"]["properties"]["start_date"]["type"] == "string"
+
+
+def test_unknown_tool_fails_cleanly() -> None:
+    outcome = dispatch(
+        "delete_all_tasks", {}, student_id=STUDENT, backend=make_backend(),
+        seen_ids=SeenIds(),
+    )
+    assert outcome.result.success is False
+    assert "Unknown tool" in outcome.result.message
+    assert outcome.validation_error is True
+
+
+def test_dispatch_injects_student_id_and_ignores_model_supplied_one() -> None:
+    backend = make_backend()
+    outcome = dispatch(
+        "get_student_context",
+        {"student_id": "stu_someone_else"},
+        student_id=STUDENT,
+        backend=backend,
+        seen_ids=SeenIds(),
+    )
+    assert outcome.result.success is True
+    assert outcome.result.data["student"]["student_id"] == STUDENT
+
+
+def test_dispatch_rejects_hallucinated_ids() -> None:
+    backend = make_backend()
+    outcome = dispatch(
+        "replan_schedule",
+        {"plan_id": "plan_20990101_deadbeef", "change_reason": "lost time",
+         "available_minutes": 60},
+        student_id=STUDENT,
+        backend=backend,
+        seen_ids=SeenIds(),
+    )
+    assert outcome.result.success is False
+    assert outcome.validation_error is True
+    assert "don't have any plan_id" in outcome.result.message
+
+
+def test_dispatch_reports_argument_errors_without_raising() -> None:
+    outcome = dispatch(
+        "get_schedule",
+        {"start_date": "2026-10-19T08:00:00", "end_date": END},
+        student_id=STUDENT,
+        backend=make_backend(),
+        seen_ids=SeenIds(),
+    )
+    assert outcome.result.success is False and outcome.validation_error is True
+    assert "ISO 8601" in outcome.result.message
+
+    extra = dispatch(
+        "get_upcoming_deadlines",
+        {"days_ahead": 3, "rm_rf": True},
+        student_id=STUDENT,
+        backend=make_backend(),
+        seen_ids=SeenIds(),
+    )
+    assert extra.result.success is False and extra.validation_error is True
+    assert "rm_rf" in extra.result.message
+
+
+def test_save_plan_is_gated_in_the_registry() -> None:
+    backend = make_backend()
+    seen = SeenIds()
+    deadlines = dispatch(
+        "get_upcoming_deadlines", {"days_ahead": 3},
+        student_id=STUDENT, backend=backend, seen_ids=seen,
+    )
+    assert deadlines.result.success is True
+    plan = dispatch(
+        "create_plan",
+        {"start_date": START, "end_date": END, "task_ids": ["task_dbms"]},
+        student_id=STUDENT, backend=backend, seen_ids=seen,
+    )
+    assert plan.result.success is True
+    plan_id = plan.result.data["plan_id"]
+
+    blocked = dispatch(
+        "save_plan", {"plan_id": plan_id},
+        student_id=STUDENT, backend=backend, seen_ids=seen,
+    )
+    assert blocked.result.success is False
+    assert blocked.gated is True
+    assert blocked.result.requires_confirmation is True
+    assert backend.active_plan_id is None
+
+    saved = dispatch(
+        "save_plan", {"plan_id": plan_id, "confirmed_by_user": True},
+        student_id=STUDENT, backend=backend, seen_ids=seen, allow_gated=True,
+    )
+    assert saved.result.success is True
+    assert backend.active_plan_id == plan_id
+    assert GATED_TOOLS == {"save_plan"}
+
+
+def test_backend_exceptions_and_bad_shapes_become_failures() -> None:
+    class RaisingBackend:
+        def get_student_context(self, *, student_id: str):
+            raise RuntimeError("db down")
+
+    class BadShapeBackend:
+        def get_student_context(self, *, student_id: str):
+            return {"success": True, "tool_name": "get_student_context", "data": {}}
+
+    raised = dispatch(
+        "get_student_context", {}, student_id=STUDENT,
+        backend=RaisingBackend(), seen_ids=SeenIds(),
+    )
+    assert raised.result.success is False
+    assert "backend" in raised.result.message
+
+    bad = dispatch(
+        "get_student_context", {}, student_id=STUDENT,
+        backend=BadShapeBackend(), seen_ids=SeenIds(),
+    )
+    assert bad.result.success is False
+    assert "invalid result shape" in bad.result.message
