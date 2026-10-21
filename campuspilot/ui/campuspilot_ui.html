@@ -416,8 +416,74 @@
   .toast.err{background:#7f1d1d;border-color:#f87171}
   .toast.ok{background:#064e3b;border-color:#34d399}
 </style>
+<style>
+  /* ============================================================
+     CAMPUSPILOT UI UPGRADE — shared design tokens (module 0)
+     Every accent the new features paint comes from these vars,
+     so one theme preset restyles grid, cursor, ring and glow.
+     ============================================================ */
+  :root{
+    --cp-accent:#6366f1;
+    --cp-accent-2:#8b5cf6;
+    --cp-grid:129 140 248;
+    --cp-cursor:#c7d2fe;
+    --cp-glow:99 102 241;
+    --cp-grid-alpha:.55;
+  }
+  html:not(.dark) {
+    --cp-accent:#4f46e5;
+    --cp-accent-2:#7c3aed;
+    --cp-grid:67 56 202;
+    --cp-cursor:#4338ca;
+    --cp-glow:79 70 229;
+  }
+  html[data-preset="sunset"]{
+    --cp-accent:#f97316; --cp-accent-2:#ec4899;
+    --cp-grid:251 146 60; --cp-cursor:#fdba74; --cp-glow:249 115 22;
+  }
+  html[data-preset="forest"]{
+    --cp-accent:#10b981; --cp-accent-2:#14b8a6;
+    --cp-grid:52 211 153; --cp-cursor:#6ee7b7; --cp-glow:16 185 129;
+  }
+  html[data-preset="mono"]{
+    --cp-accent:#e2e8f0; --cp-accent-2:#94a3b8;
+    --cp-grid:148 163 184; --cp-cursor:#e2e8f0; --cp-glow:203 213 225;
+  }
+  html[data-preset="neon"]{
+    --cp-accent:#22d3ee; --cp-accent-2:#e879f9;
+    --cp-grid:34 211 238; --cp-cursor:#67e8f9; --cp-glow:34 211 238;
+  }
+
+  /* ---- Kinetic grid canvas: behind the app, never above it ---- */
+  #cpGridCanvas{
+    position:fixed; inset:0; width:100%; height:100%;
+    z-index:0; pointer-events:none; display:block;
+  }
+  body.cp-grid-off #cpGridCanvas{display:none}
+  .cp-app-layer{position:relative; z-index:10}
+
+  /* ---- Accessibility: larger text / high contrast toggles ---- */
+  html.cp-large-text{font-size:17px}
+  html.cp-contrast .glass-panel{background:rgba(9,13,24,.96)}
+  html.cp-contrast .glass-card{background:rgba(20,28,45,.92)}
+  html:not(.dark).cp-contrast .glass-panel{background:rgba(255,255,255,.99)}
+  html:not(.dark).cp-contrast .glass-card{background:rgba(248,250,252,.99)}
+  html.cp-contrast .text-slate-400,html.cp-contrast .text-slate-500{color:#cbd5e1}
+
+  /* Visible keyboard focus for every new control */
+  .cp-focusable:focus-visible,
+  #cpSettingsDrawer :focus-visible,
+  #cpRadialMenu :focus-visible,
+  #cpPomodoro :focus-visible{
+    outline:2px solid rgb(var(--cp-glow));
+    outline-offset:2px;
+    border-radius:12px;
+  }
+</style>
 </head>
 <body class="bg-mesh text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden">
+  <!-- KineticGrid background (module 1). z-0, pointer-events-none, purely decorative. -->
+  <canvas aria-hidden="true" id="cpGridCanvas"></canvas>
   <!-- TOP BAR -->
   <header class="glass-panel sticky top-0 z-40 border-b px-4 lg:px-6 py-3 transition-colors duration-300">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -459,7 +525,7 @@
   </header>
 
   <!-- MAIN APP WRAPPER -->
-  <div class="max-w-7xl mx-auto w-full flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-6">
+  <div class="cp-app-layer max-w-7xl mx-auto w-full flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-6">
     <!-- LEFT SIDEBAR -->
     <aside class="w-full lg:w-72 shrink-0 flex flex-col gap-5 glass-panel rounded-2xl p-5 border shadow-xl hidden lg:flex">
       <div class="flex items-center gap-3.5 pb-4 border-b border-white/10">
@@ -2211,6 +2277,320 @@
       const summary = document.getElementById('dashboardSummary');
       if (summary) summary.textContent = 'Server offline. Start it with: uvicorn server:app --port 8000';
     });
+  </script>
+
+  <!-- ============================================================
+       CAMPUSPILOT UI UPGRADE — vanilla modules
+       The app is a single-file, dependency-free HTML page (Tailwind +
+       lucide from CDN), so the requested React components are ported as
+       self-contained vanilla modules that share one store and one theme.
+       ============================================================ -->
+  <script>
+  /* ============================================================
+     MODULE 0 — settings store
+     Every UI setting lives in one localStorage key, `campuspilot.ui`,
+     deep-merged over defaults so an old saved blob never breaks a new
+     build. Modules subscribe with onUiChange().
+     ============================================================ */
+  (function () {
+    'use strict';
+    const KEY = 'campuspilot.ui';
+
+    /* A preset is one click that recolours grid + cursor + accents + glow. */
+    const PRESETS = {
+      aurora: { label: 'Aurora', accent: '#6366f1', accent2: '#8b5cf6', grid: '129 140 248', cursor: '#c7d2fe', glow: '99 102 241' },
+      sunset: { label: 'Sunset', accent: '#f97316', accent2: '#ec4899', grid: '251 146 60', cursor: '#fdba74', glow: '249 115 22' },
+      forest: { label: 'Forest', accent: '#10b981', accent2: '#14b8a6', grid: '52 211 153', cursor: '#6ee7b7', glow: '16 185 129' },
+      mono:   { label: 'Mono', accent: '#e2e8f0', accent2: '#94a3b8', grid: '148 163 184', cursor: '#e2e8f0', glow: '203 213 225' },
+      neon:   { label: 'Neon', accent: '#22d3ee', accent2: '#e879f9', grid: '34 211 238', cursor: '#67e8f9', glow: '34 211 238' },
+    };
+
+    const DEFAULTS = {
+      preset: 'aurora',
+      accentOverride: null,
+      theme: 'system',
+      grid: { mode: 'default', intensity: 60 },
+      cursor: { on: true, size: 28, strength: 0.4, blend: 'exclusion', shape: 'circle' },
+      pomodoro: { focus: 25, short: 5, long: 15, rounds: 4, autoStart: false, sound: true, notify: true },
+      voice: { lang: 'en-IN', readAloud: false, rate: 1 },
+      a11y: { reducedMotion: false, largeText: false, contrast: false },
+      prefs: { target: 4.5, start: '09:00', end: '22:00', maxFocus: 90, break: 15 },
+      runtime: { pomo: null, pomoPos: null },
+    };
+
+    const clone = (value) => JSON.parse(JSON.stringify(value));
+
+    function deepMerge(base, over) {
+      if (!over || typeof over !== 'object') return base;
+      Object.keys(over).forEach((key) => {
+        const next = over[key];
+        if (next && typeof next === 'object' && !Array.isArray(next) && base[key] && typeof base[key] === 'object') {
+          base[key] = deepMerge(base[key], next);
+        } else if (next !== undefined) {
+          base[key] = next;
+        }
+      });
+      return base;
+    }
+
+    function read() {
+      try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (err) { return null; }
+    }
+
+    let data = deepMerge(clone(DEFAULTS), read() || {});
+
+    function persist() {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (err) { /* private mode */ }
+    }
+
+    function get(path) {
+      if (!path) return data;
+      return path.split('.').reduce((node, part) => (node == null ? undefined : node[part]), data);
+    }
+
+    function set(path, value) {
+      const parts = path.split('.');
+      let node = data;
+      parts.slice(0, -1).forEach((part) => {
+        if (typeof node[part] !== 'object' || node[part] === null) node[part] = {};
+        node = node[part];
+      });
+      node[parts[parts.length - 1]] = value;
+      persist();
+      apply();
+      document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path, value } }));
+    }
+
+    function reset() {
+      data = clone(DEFAULTS);
+      persist();
+      apply();
+      document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path: '*', value: null } }));
+    }
+
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+    const osReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    function resolvedTheme() {
+      const mode = data.theme || 'system';
+      if (mode === 'light' || mode === 'dark') return mode;
+      return systemDark.matches ? 'dark' : 'light';
+    }
+
+    function reducedMotion() {
+      return Boolean(data.a11y.reducedMotion) || osReduced.matches;
+    }
+
+    function apply() {
+      const html = document.documentElement;
+      const preset = PRESETS[data.preset] || PRESETS.aurora;
+      const dark = resolvedTheme() === 'dark';
+
+      html.classList.toggle('dark', dark);
+      html.classList.toggle('light', !dark);
+      html.setAttribute('data-preset', data.preset in PRESETS ? data.preset : 'aurora');
+
+      const accent = data.accentOverride || preset.accent;
+      html.style.setProperty('--cp-accent', accent);
+      html.style.setProperty('--cp-accent-2', preset.accent2);
+      html.style.setProperty('--cp-grid', preset.grid);
+      html.style.setProperty('--cp-cursor', preset.cursor);
+      html.style.setProperty('--cp-glow', preset.glow);
+      html.style.setProperty('--cp-grid-alpha', String(Math.max(0, Math.min(100, data.grid.intensity)) / 100));
+
+      html.classList.toggle('cp-large-text', Boolean(data.a11y.largeText));
+      html.classList.toggle('cp-contrast', Boolean(data.a11y.contrast));
+      document.body.classList.toggle('cp-grid-off', data.grid.mode === 'off');
+
+      const themeIcon = document.getElementById('themeIcon');
+      if (themeIcon) {
+        themeIcon.setAttribute('data-lucide', dark ? 'sun' : 'moon');
+        themeIcon.classList.toggle('text-amber-300', dark);
+        themeIcon.classList.toggle('text-indigo-600', !dark);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+
+    /* The header toggle predates this store; keep it working and persist. */
+    const themeBtn = document.getElementById('themeToggleBtn');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const dark = document.documentElement.classList.contains('dark');
+        data.theme = dark ? 'dark' : 'light';
+        persist();
+      });
+    }
+    systemDark.addEventListener('change', () => { if (data.theme === 'system') apply(); });
+    osReduced.addEventListener('change', () => {
+      apply();
+      document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path: 'a11y', value: null } }));
+    });
+
+    apply();
+
+    window.cpUI = {
+      KEY, PRESETS, DEFAULTS, get, set, reset, apply,
+      get theme() { return resolvedTheme(); },
+      get reducedMotion() { return reducedMotion(); },
+      toggleTheme() {
+        data.theme = resolvedTheme() === 'dark' ? 'light' : 'dark';
+        persist(); apply();
+        document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path: 'theme', value: data.theme } }));
+      },
+    };
+  })();
+
+  /* ============================================================
+     MODULE 1 — KineticGrid background
+     A canvas grid that follows the pointer and ripples on click.
+     The original component painted an opaque #161618 background;
+     here it is transparent so the app's navy mesh stays visible,
+     and its accent comes from the active theme preset.
+     ============================================================ */
+  (function () {
+    'use strict';
+    const canvas = document.getElementById('cpGridCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+
+    const GAP = 54;          // cell size in CSS px
+    const NODE_EVERY = 3;    // draw a dot every N cells
+    let width = 0, height = 0, dpr = 1;
+    let raf = 0;
+    const pointer = { x: -9999, y: -9999, tx: 0, ty: 0 };
+    const ripples = [];
+
+    const state = () => (window.cpUI ? window.cpUI.get() : { grid: { mode: 'default', intensity: 60 } });
+    const reduced = () => (window.cpUI ? window.cpUI.reducedMotion : false);
+    const mode = () => (state().grid || {}).mode || 'default';
+    const intensity = () => Math.max(0, Math.min(100, ((state().grid || {}).intensity ?? 60))) / 100;
+
+    function palette() {
+      const css = getComputedStyle(document.documentElement);
+      const rgb = (css.getPropertyValue('--cp-grid') || '129 140 248').trim();
+      return { rgb, dark: document.documentElement.classList.contains('dark') };
+    }
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (reduced()) drawFrame(0);
+    }
+
+    function drawFrame(t) {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, width, height);
+      if (mode() === 'off') return;
+
+      const { rgb, dark } = palette();
+      const base = intensity();
+      const mono = mode() === 'monochrome';
+      const alphaBase = (mono ? 0.22 : 0.34) * (dark ? 1 : 0.9) * base;
+
+      const ox = pointer.tx * 0.015;
+      const oy = pointer.ty * 0.015;
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgb(' + rgb + ' / ' + (alphaBase * 0.5).toFixed(3) + ')';
+
+      const startX = ((ox % GAP) + GAP) % GAP;
+      const startY = ((oy % GAP) + GAP) % GAP;
+
+      ctx.beginPath();
+      for (let x = startX; x <= width + GAP; x += GAP) {
+        ctx.moveTo(Math.round(x) + 0.5, 0);
+        ctx.lineTo(Math.round(x) + 0.5, height);
+      }
+      for (let y = startY; y <= height + GAP; y += GAP) {
+        ctx.moveTo(0, Math.round(y) + 0.5);
+        ctx.lineTo(width, Math.round(y) + 0.5);
+      }
+      ctx.stroke();
+
+      /* Nodes brighten near the pointer — the "kinetic" part. */
+      let indexX = 0;
+      for (let x = startX; x <= width + GAP; x += GAP, indexX += 1) {
+        let indexY = 0;
+        for (let y = startY; y <= height + GAP; y += GAP, indexY += 1) {
+          if (indexX % NODE_EVERY !== 0 || indexY % NODE_EVERY !== 0) continue;
+          const dx = x - pointer.x;
+          const dy = y - pointer.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const near = Math.max(0, 1 - dist / 190);
+          const radius = 1.1 + near * 2.6;
+          const alpha = alphaBase * (0.9 + near * 1.9);
+          ctx.beginPath();
+          ctx.fillStyle = 'rgb(' + rgb + ' / ' + Math.min(1, alpha).toFixed(3) + ')';
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      /* Click ripples. */
+      if (!reduced()) {
+        for (let i = ripples.length - 1; i >= 0; i -= 1) {
+          const rip = ripples[i];
+          const age = (t - rip.t) / 900;
+          if (age >= 1) { ripples.splice(i, 1); continue; }
+          const radius = 20 + age * 190;
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgb(' + rgb + ' / ' + ((1 - age) * 0.42 * base).toFixed(3) + ')';
+          ctx.lineWidth = 1.5 * (1 - age) + 0.3;
+          ctx.arc(rip.x, rip.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function loop(t) {
+      raf = 0;
+      if (document.hidden) return;
+      /* Ease the parallax so the grid feels weighted, not jittery. */
+      pointer.tx += (pointer.x - width / 2 - pointer.tx) * 0.06;
+      pointer.ty += (pointer.y - height / 2 - pointer.ty) * 0.06;
+      drawFrame(t);
+      if (!reduced()) raf = requestAnimationFrame(loop);
+    }
+
+    function kick() {
+      if (!raf && !document.hidden) raf = requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('pointermove', (event) => {
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      if (reduced()) { drawFrame(performance.now()); return; }
+      kick();
+    }, { passive: true });
+
+    window.addEventListener('pointerdown', (event) => {
+      if (reduced() || mode() === 'off') return;
+      ripples.push({ x: event.clientX, y: event.clientY, t: performance.now() });
+      if (ripples.length > 6) ripples.shift();
+      kick();
+    }, { passive: true, capture: true });
+
+    window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && raf) { cancelAnimationFrame(raf); raf = 0; }
+      else if (!document.hidden) { kick(); }
+    });
+    document.addEventListener('campuspilot:ui', () => {
+      if (mode() === 'off') { ctx.clearRect(0, 0, width, height); }
+      resize();
+      kick();
+    });
+
+    resize();
+    if (!reduced()) kick(); else drawFrame(0);
+  })();
   </script>
 </body>
 </html>
