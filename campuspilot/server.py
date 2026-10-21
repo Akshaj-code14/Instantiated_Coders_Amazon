@@ -34,6 +34,7 @@ from integration.api_models import (
     OkResponse,
     PlanCancelRequest,
     PlanSaveRequest,
+    PreferencesRequest,
     StateResponse,
     TaskCompleteRequest,
     TaskDurationRequest,
@@ -53,6 +54,7 @@ from integration.wiring import (
     pending_plan_data,
     startup,
     task_due_at,
+    update_preferences,
 )
 
 logger = logging.getLogger("campuspilot")
@@ -361,6 +363,24 @@ CHECKIN_STATUS = {
     "Partial": "partial",
     "Needed help": "needs_help",
 }
+
+
+@app.post("/preferences", response_model=OkResponse)
+def save_preferences(payload: PreferencesRequest, session=Depends(get_session)):
+    with session.lock:
+        saved = update_preferences(
+            session.student_id,
+            daily_start_time=payload.daily_start_time,
+            daily_end_time=payload.daily_end_time,
+            preferred_break_minutes=payload.preferred_break_minutes,
+            max_focus_minutes=payload.max_focus_minutes,
+        )
+        if not saved:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No preferences row for this student."},
+            )
+        return {"ok": True, "reply": "Preferences saved."}
 
 
 @app.post("/checkin", response_model=OkResponse)

@@ -595,6 +595,57 @@
   .cp-radial-tip.cp-show{opacity:1}
   .cp-radial-tip kbd{font-family:ui-monospace,monospace; opacity:.65; margin-left:4px}
 
+  /* ---- Settings drawer (module 6) ---- */
+  #cpSettingsBackdrop{
+    position:fixed; inset:0; z-index:55; display:none;
+    background:rgba(2,6,23,.5); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+  }
+  #cpSettingsBackdrop.cp-open{display:block; animation:cpFadeIn .18s ease}
+  @keyframes cpFadeIn{from{opacity:0}to{opacity:1}}
+  #cpSettingsDrawer{
+    position:fixed; top:0; right:0; height:100%; width:min(370px,100%); z-index:60;
+    display:flex; flex-direction:column; color:#e2e8f0;
+    background:rgba(11,16,28,.97); border-left:1px solid rgb(var(--cp-glow) / .32);
+    box-shadow:-24px 0 60px rgba(0,0,0,.5); transform:translateX(102%);
+    transition:transform .3s cubic-bezier(.2,.9,.2,1);
+  }
+  #cpSettingsDrawer.cp-open{transform:none}
+  html:not(.dark) #cpSettingsDrawer{background:rgba(255,255,255,.98); color:#0f172a}
+  .cp-set-head{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 16px; border-bottom:1px solid rgba(148,163,184,.2)}
+  .cp-set-head h3{font-size:14px; font-weight:700; margin:0}
+  .cp-set-head p{font-size:10px; opacity:.6; margin:2px 0 0}
+  .cp-set-close{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;border:0;cursor:pointer;background:rgba(148,163,184,.16);color:inherit}
+  .cp-set-close:hover{background:rgba(148,163,184,.32)}
+  .cp-set-body{flex:1; overflow-y:auto; padding:4px 16px 18px}
+  .cp-set-section{padding:12px 0; border-bottom:1px solid rgba(148,163,184,.14)}
+  .cp-set-section:last-child{border-bottom:0}
+  .cp-set-section h4{font-size:10px; text-transform:uppercase; letter-spacing:.11em; opacity:.55; margin:0 0 8px}
+  .cp-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; font-size:12px}
+  .cp-row>span{flex:1}
+  .cp-row input[type="number"],.cp-row input[type="time"],.cp-row select{
+    width:96px; padding:4px 7px; border-radius:8px; font-size:12px; color:inherit;
+    background:rgba(148,163,184,.16); border:1px solid rgba(148,163,184,.3);
+  }
+  .cp-row input[type="range"]{width:118px; accent-color:rgb(var(--cp-glow))}
+  .cp-row input[type="checkbox"]{width:16px; height:16px; accent-color:rgb(var(--cp-glow))}
+  .cp-seg{display:flex; gap:3px; padding:3px; border-radius:10px; background:rgba(148,163,184,.14)}
+  .cp-seg button{padding:4px 8px; font-size:11px; font-weight:600; border:0; border-radius:7px; background:transparent; color:inherit; opacity:.62; cursor:pointer}
+  .cp-seg button[aria-pressed="true"]{background:rgb(var(--cp-glow) / .9); color:#fff; opacity:1}
+  .cp-swatches{display:flex; gap:6px; flex-wrap:wrap; padding-top:4px}
+  .cp-swatch{width:36px; height:26px; border-radius:8px; border:2px solid transparent; cursor:pointer; padding:0}
+  .cp-swatch[aria-pressed="true"]{border-color:currentColor; box-shadow:0 0 0 2px rgb(var(--cp-glow) / .45)}
+  .cp-set-note{font-size:10px; opacity:.55; margin-top:6px; line-height:1.45}
+  .cp-set-btn{padding:6px 12px; border-radius:9px; border:0; font-size:11px; font-weight:700; cursor:pointer; background:rgb(var(--cp-glow) / .9); color:#fff}
+  .cp-set-btn.cp-ghost{background:rgba(148,163,184,.18); color:inherit}
+  .cp-set-btn:focus-visible,#cpSettingsDrawer button:focus-visible,#cpSettingsDrawer input:focus-visible,#cpSettingsDrawer select:focus-visible{outline:2px solid rgb(var(--cp-glow)); outline-offset:2px}
+
+  /* inline study-preferences editor in the sidebar */
+  #cpPrefsEditor{padding-top:10px}
+  #cpPrefsEditor .cp-field{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0; font-size:11px}
+  #cpPrefsEditor input{width:88px; padding:3px 6px; border-radius:7px; font-size:11px; color:inherit; background:rgba(148,163,184,.16); border:1px solid rgba(148,163,184,.3)}
+  #cpPrefsEditor .cp-actions{display:flex; gap:6px; justify-content:flex-end; padding-top:8px}
+  #cpPrefsEditor.hidden{display:none}
+
   /* Visible keyboard focus for every new control */
   .cp-focusable:focus-visible,
   #cpSettingsDrawer :focus-visible,
@@ -682,14 +733,14 @@
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Study Preferences</span>
-          <span class="text-[11px] text-blue-400 hover:underline cursor-pointer">Edit</span>
+          <span aria-label="Edit study preferences" class="text-[11px] text-blue-400 hover:underline cursor-pointer" id="cpEditPrefs" role="button" tabindex="0">Edit</span>
         </div>
         <div class="space-y-1.5">
           <div class="flex justify-between text-xs">
             <span class="text-slate-300">Daily Study Target</span>
             <span class="font-bold text-indigo-400" id="studyHoursVal">4.5 hrs</span>
           </div>
-          <input class="w-full accent-indigo-500 cursor-pointer h-1.5 bg-white/10 rounded-lg" id="studyHoursRange" max="8" min="2" step="0.5" type="range" value="4.5"/>
+          <input class="w-full accent-indigo-500 cursor-pointer h-1.5 bg-white/10 rounded-lg" id="studyHoursRange" max="12" min="1" step="0.5" type="range" value="4.5"/>
           <div class="flex justify-between text-[10px] text-slate-500">
             <span>2h (Light)</span>
             <span>8h (Intense)</span>
@@ -2484,7 +2535,7 @@
       cursor: { on: true, size: 28, strength: 0.4, blend: 'exclusion', shape: 'circle' },
       pomodoro: { focus: 25, short: 5, long: 15, rounds: 4, autoStart: false, sound: true, notify: true },
       voice: { lang: 'en-IN', readAloud: false, rate: 1 },
-      a11y: { reducedMotion: false, largeText: false, contrast: false },
+      a11y: { reducedMotion: false, largeText: false, contrast: false, cameraOff: true },
       prefs: { target: 4.5, start: '09:00', end: '22:00', maxFocus: 90, break: 15 },
       runtime: { pomo: null, pomoPos: null },
     };
@@ -3166,7 +3217,7 @@
       const box = panel.getBoundingClientRect();
       drag = { dx: event.clientX - box.left, dy: event.clientY - box.top };
       el.head.classList.add('cp-grabbing');
-      el.head.setPointerCapture(event.pointerId);
+      try { el.head.setPointerCapture(event.pointerId); } catch (err) { /* synthetic or lost pointer */ }
       document.dispatchEvent(new CustomEvent('campuspilot:dragging', { detail: { on: true } }));
     });
     el.head.addEventListener('pointermove', (event) => {
@@ -3369,7 +3420,7 @@
     function decorateCards() {
       document.querySelectorAll('[data-task-id]').forEach((card) => {
         if (card.querySelector('[data-cp-focus]')) return;
-        const titleEl = card.querySelector('h3');
+        const titleEl = card.querySelector('.task-title, h3, h4, h5');
         const title = titleEl ? titleEl.textContent.trim() : 'this task';
         const host = card.querySelector('button') ? card.querySelector('button').parentElement : null;
         if (!host) return;
@@ -3815,6 +3866,382 @@
 
     window.addEventListener('resize', () => { if (isOpen) place(); });
     window.cpRadial = { open, close, get isOpen() { return isOpen; } };
+  })();
+
+  /* ============================================================
+     MODULE 6 — settings drawer + inline study-preference editing
+     UI settings live in localStorage; the four study preferences the
+     database owns are written through POST /preferences so the server
+     stays the source of truth for planning.
+     ============================================================ */
+  (function () {
+    'use strict';
+    if (!window.cpUI) return;
+
+    const X = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+    const html = (id) => `<div class="cp-set-section"><h4>${id}</h4>`;
+    const row = (label, control) => `<div class="cp-row"><span>${label}</span>${control}</div>`;
+    const num = (ui, min, max, step) => `<input type="number" data-ui="${ui}" data-type="number" min="${min}" max="${max}" step="${step}" aria-label="${ui}">`;
+    const range = (ui, min, max, step) => `<input type="range" data-ui="${ui}" data-type="number" min="${min}" max="${max}" step="${step}" aria-label="${ui}">`;
+    const check = (ui) => `<input type="checkbox" data-ui="${ui}" data-type="bool" aria-label="${ui}">`;
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'cpSettingsBackdrop';
+    const drawer = document.createElement('aside');
+    drawer.id = 'cpSettingsDrawer';
+    drawer.setAttribute('role', 'dialog');
+    drawer.setAttribute('aria-modal', 'true');
+    drawer.setAttribute('aria-label', 'Settings');
+    drawer.setAttribute('aria-hidden', 'true');
+
+    const swatches = Object.entries(window.cpUI.PRESETS).map(([key, preset]) =>
+      `<button type="button" class="cp-swatch" data-preset="${key}" aria-pressed="false" aria-label="${preset.label} preset" title="${preset.label}" style="background:linear-gradient(135deg,${preset.accent},${preset.accent2})"></button>`
+    ).join('');
+
+    drawer.innerHTML = `
+      <div class="cp-set-head">
+        <div><h3>Settings</h3><p>Saved in this browser · study preferences in SQLite</p></div>
+        <button type="button" class="cp-set-close" data-close aria-label="Close settings">${X}</button>
+      </div>
+      <div class="cp-set-body">
+        ${html('Appearance')}
+          ${row('Theme', '<div class="cp-seg" role="group" aria-label="Theme"><button type="button" data-theme="dark">Dark</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="system">System</button></div>')}
+          <div class="cp-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span>Preset</span><div class="cp-swatches">${swatches}</div></div>
+          ${row('Accent override', '<span style="display:flex;gap:6px;align-items:center"><input type="color" data-ui="accentOverride" data-type="color" aria-label="Accent colour"><button type="button" class="cp-set-btn cp-ghost" data-clear-accent>Use preset</button></span>')}
+        </div>
+        ${html('Background')}
+          ${row('Grid style', '<select data-ui="grid.mode" aria-label="Grid style"><option value="default">Default</option><option value="monochrome">Monochrome</option><option value="off">Off</option></select>')}
+          ${row('Intensity', range('grid.intensity', 0, 100, 5))}
+        </div>
+        ${html('Cursor')}
+          ${row('Magnetic cursor', check('cursor.on'))}
+          ${row('Size', range('cursor.size', 12, 44, 2))}
+          ${row('Magnetic strength', range('cursor.strength', 0, 1, 0.05))}
+          ${row('Blend mode', '<select data-ui="cursor.blend" aria-label="Blend mode"><option value="exclusion">Exclusion</option><option value="difference">Difference</option><option value="normal">Normal</option></select>')}
+          ${row('Shape', '<select data-ui="cursor.shape" aria-label="Cursor shape"><option value="circle">Circle</option><option value="rounded">Rounded</option><option value="square">Square</option></select>')}
+        </div>
+        ${html('Pomodoro')}
+          ${row('Focus (min)', num('pomodoro.focus', 5, 90, 1))}
+          ${row('Short break', num('pomodoro.short', 1, 60, 1))}
+          ${row('Long break', num('pomodoro.long', 1, 90, 1))}
+          ${row('Sessions before long break', num('pomodoro.rounds', 2, 8, 1))}
+          ${row('Auto-start next', check('pomodoro.autoStart'))}
+          ${row('Chime', check('pomodoro.sound'))}
+          ${row('Notifications', check('pomodoro.notify'))}
+        </div>
+        ${html('Study preferences')}
+          ${row('Daily target (h)', num('prefs.target', 1, 12, 0.5))}
+          ${row('Pomodoro break (min)', num('prefs.break', 5, 30, 5))}
+          ${row('Window start', '<input type="time" data-ui="prefs.start" aria-label="Window start">')}
+          ${row('Window end', '<input type="time" data-ui="prefs.end" aria-label="Window end">')}
+          ${row('Max focus (min)', num('prefs.maxFocus', 15, 90, 5))}
+          <div class="cp-row" style="justify-content:flex-end"><button type="button" class="cp-set-btn" data-save-study>Save to SQLite</button></div>
+          <p class="cp-set-note">Window, break and max focus are written to the preferences table. Daily target is a UI-only value — the table has no target column and the schema is unchanged.</p>
+        </div>
+        ${html('Voice')}
+          ${row('Speech language', '<select data-ui="voice.lang" aria-label="Speech language"><option value="en-IN">English (India)</option><option value="en-US">English (US)</option><option value="te-IN">Telugu</option><option value="hi-IN">Hindi</option></select>')}
+          ${row('Read replies aloud', check('voice.readAloud'))}
+          ${row('Speech rate', range('voice.rate', 0.5, 1.5, 0.1))}
+        </div>
+        ${html('Accessibility')}
+          ${row('Reduce motion', check('a11y.reducedMotion'))}
+          ${row('Larger text', check('a11y.largeText'))}
+          ${row('High contrast', check('a11y.contrast'))}
+          ${row('Keep camera off', check('a11y.cameraOff'))}
+        </div>
+        ${html('Data')}
+          <div class="cp-row"><span>Reset every UI setting</span><button type="button" class="cp-set-btn cp-ghost" data-reset>Reset</button></div>
+          <p class="cp-set-note">Clears the local UI key only; your tasks, plans and check-ins in SQLite are untouched.</p>
+        </div>
+      </div>`;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+
+    const studyInputs = {
+      target: drawer.querySelector('[data-ui="prefs.target"]'),
+      breakMin: drawer.querySelector('[data-ui="prefs.break"]'),
+      start: drawer.querySelector('[data-ui="prefs.start"]'),
+      end: drawer.querySelector('[data-ui="prefs.end"]'),
+      maxFocus: drawer.querySelector('[data-ui="prefs.maxFocus"]'),
+    };
+
+    function toast(msg, kind) { if (typeof window.showToast === 'function') window.showToast(msg, kind); }
+
+    function syncSidebar() {
+      const prefs = window.cpUI.get().prefs;
+      const hoursVal = document.getElementById('studyHoursVal');
+      const hoursRange = document.getElementById('studyHoursRange');
+      const breakVal = document.getElementById('breakLengthVal');
+      const breakRange = document.getElementById('breakLengthRange');
+      if (hoursVal) hoursVal.textContent = prefs.target + ' hrs';
+      if (hoursRange) hoursRange.value = String(prefs.target);
+      if (breakVal) breakVal.textContent = prefs.break + ' min';
+      if (breakRange) breakRange.value = String(prefs.break);
+    }
+
+    function validateStudy(values) {
+      if (!(values.target >= 1 && values.target <= 12)) return 'Daily target must be between 1 and 12 hours.';
+      if (!(values.breakMin >= 5 && values.breakMin <= 30)) return 'Pomodoro break must be between 5 and 30 minutes.';
+      if (!(values.maxFocus >= 15 && values.maxFocus <= 90)) return 'Max focus must be between 15 and 90 minutes.';
+      if (!/^\d{2}:\d{2}$/.test(values.start) || !/^\d{2}:\d{2}$/.test(values.end)) return 'Pick a valid start and end time.';
+      if (values.start >= values.end) return 'The planning window must start before it ends.';
+      return null;
+    }
+
+    async function persistStudy(values) {
+      const problem = validateStudy(values);
+      if (problem) { toast(problem, 'err'); return false; }
+      try {
+        const res = await fetch('/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            daily_start_time: values.start,
+            daily_end_time: values.end,
+            preferred_break_minutes: Number(values.breakMin),
+            max_focus_minutes: Number(values.maxFocus),
+          }),
+        });
+        if (!res.ok) throw new Error('The server rejected those preferences.');
+      } catch (err) {
+        toast(err.message || 'Could not save preferences.', 'err');
+        refresh();
+        return false;
+      }
+      window.cpUI.set('prefs.target', Number(values.target));
+      window.cpUI.set('prefs.break', Number(values.breakMin));
+      window.cpUI.set('prefs.start', values.start);
+      window.cpUI.set('prefs.end', values.end);
+      window.cpUI.set('prefs.maxFocus', Number(values.maxFocus));
+      /* Re-render from the server first, then put the preference-driven
+         sidebar values back: the state render derives its own numbers. */
+      if (typeof window.loadState === 'function') {
+        await window.loadState().catch(() => {});
+      }
+      syncSidebar();
+      toast('Study preferences saved.', 'ok');
+      return true;
+    }
+
+    function readStudy() {
+      return {
+        target: Number(studyInputs.target.value),
+        breakMin: Number(studyInputs.breakMin.value),
+        start: studyInputs.start.value,
+        end: studyInputs.end.value,
+        maxFocus: Number(studyInputs.maxFocus.value),
+      };
+    }
+
+    /* ---------- generic binding for [data-ui] ---------- */
+    function bindControls() {
+      drawer.querySelectorAll('[data-ui]').forEach((el) => {
+        const path = el.dataset.ui;
+        const type = el.dataset.type || (el.type === 'checkbox' ? 'bool' : 'string');
+        el.addEventListener('change', () => {
+          let value;
+          if (type === 'bool') value = el.checked;
+          else if (type === 'number') value = Number(el.value);
+          else if (type === 'color') value = el.value;
+          else value = el.value;
+          window.cpUI.set(path, value);
+          if (el.type === 'range') toast('Updated', 'ok');
+        });
+      });
+    }
+
+    function refresh() {
+      drawer.querySelectorAll('[data-ui]').forEach((el) => {
+        const current = window.cpUI.get(el.dataset.ui);
+        const type = el.dataset.type || (el.type === 'checkbox' ? 'bool' : 'string');
+        if (type === 'bool') el.checked = Boolean(current);
+        else if (el.type === 'color') {
+          const preset = window.cpUI.PRESETS[window.cpUI.get().preset] || window.cpUI.PRESETS.aurora;
+          el.value = current || preset.accent;
+        } else el.value = current == null ? '' : String(current);
+      });
+      const theme = window.cpUI.get().theme;
+      drawer.querySelectorAll('[data-theme]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', btn.dataset.theme === theme ? 'true' : 'false');
+      });
+      const preset = window.cpUI.get().preset;
+      drawer.querySelectorAll('[data-preset]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', btn.dataset.preset === preset ? 'true' : 'false');
+      });
+    }
+
+    drawer.querySelectorAll('[data-theme]').forEach((btn) => {
+      btn.addEventListener('click', () => { window.cpUI.set('theme', btn.dataset.theme); refresh(); });
+    });
+    drawer.querySelectorAll('[data-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => { window.cpUI.set('preset', btn.dataset.preset); refresh(); toast('Preset: ' + btn.getAttribute('aria-label').replace(' preset', '')); });
+    });
+    const clearAccent = drawer.querySelector('[data-clear-accent]');
+    if (clearAccent) clearAccent.addEventListener('click', () => { window.cpUI.set('accentOverride', null); refresh(); });
+
+    drawer.querySelector('[data-save-study]').addEventListener('click', () => { persistStudy(readStudy()); });
+    drawer.querySelector('[data-reset]').addEventListener('click', () => {
+      if (!window.confirm('Reset every UI setting? Tasks, plans and check-ins are not affected.')) return;
+      window.cpUI.reset();
+      refresh();
+      syncSidebar();
+      toast('UI settings reset.', 'ok');
+    });
+    drawer.querySelector('[data-close]').addEventListener('click', () => close());
+    backdrop.addEventListener('click', () => close());
+
+    let isOpen = false;
+    let lastFocus = null;
+
+    function open() {
+      if (isOpen) return;
+      isOpen = true;
+      lastFocus = document.activeElement;
+      refresh();
+      backdrop.classList.add('cp-open');
+      drawer.classList.add('cp-open');
+      drawer.setAttribute('aria-hidden', 'false');
+      const first = drawer.querySelector('button, input, select');
+      if (first) first.focus({ preventScroll: true });
+    }
+
+    function close() {
+      if (!isOpen) return;
+      isOpen = false;
+      backdrop.classList.remove('cp-open');
+      drawer.classList.remove('cp-open');
+      drawer.setAttribute('aria-hidden', 'true');
+      if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) close();
+    });
+
+    /* ---------- sidebar: inline study-preference editor ---------- */
+    const editLink = document.getElementById('cpEditPrefs');
+    let editor = null;
+
+    function buildEditor() {
+      if (!editLink) return null;
+      const block = editLink.closest('div.space-y-4');
+      if (!block) return null;
+      editor = document.createElement('div');
+      editor.id = 'cpPrefsEditor';
+      editor.className = 'hidden';
+      editor.innerHTML = `
+        <label class="cp-field"><span>Target (h)</span><input type="number" id="cpEditTarget" min="1" max="12" step="0.5" aria-label="Daily study target in hours"></label>
+        <label class="cp-field"><span>Break (min)</span><input type="number" id="cpEditBreak" min="5" max="30" step="5" aria-label="Pomodoro break in minutes"></label>
+        <label class="cp-field"><span>Start</span><input type="time" id="cpEditStart" aria-label="Planning window start"></label>
+        <label class="cp-field"><span>End</span><input type="time" id="cpEditEnd" aria-label="Planning window end"></label>
+        <label class="cp-field"><span>Max focus</span><input type="number" id="cpEditMaxFocus" min="15" max="90" step="5" aria-label="Maximum focus minutes"></label>
+        <div class="cp-actions">
+          <button type="button" class="cp-set-btn cp-ghost" id="cpEditCancel">Cancel</button>
+          <button type="button" class="cp-set-btn" id="cpEditSave">Save</button>
+        </div>`;
+      block.appendChild(editor);
+
+      const fields = {
+        target: editor.querySelector('#cpEditTarget'),
+        breakMin: editor.querySelector('#cpEditBreak'),
+        start: editor.querySelector('#cpEditStart'),
+        end: editor.querySelector('#cpEditEnd'),
+        maxFocus: editor.querySelector('#cpEditMaxFocus'),
+      };
+
+      editor.querySelector('#cpEditCancel').addEventListener('click', () => toggleEditor(false));
+      editor.querySelector('#cpEditSave').addEventListener('click', async () => {
+        const ok = await persistStudy({
+          target: Number(fields.target.value),
+          breakMin: Number(fields.breakMin.value),
+          start: fields.start.value,
+          end: fields.end.value,
+          maxFocus: Number(fields.maxFocus.value),
+        });
+        if (ok) toggleEditor(false);
+      });
+      return fields;
+    }
+
+    let editFields = null;
+
+    function toggleEditor(force) {
+      if (!editor) editFields = buildEditor();
+      if (!editor) return;
+      const show = typeof force === 'boolean' ? force : editor.classList.contains('hidden');
+      if (show) {
+        const prefs = window.cpUI.get().prefs;
+        editFields = editFields || buildEditor();
+        editFields.target.value = String(prefs.target);
+        editFields.breakMin.value = String(prefs.break);
+        editFields.start.value = prefs.start;
+        editFields.end.value = prefs.end;
+        editFields.maxFocus.value = String(prefs.maxFocus);
+        editor.classList.remove('hidden');
+        editFields.target.focus({ preventScroll: true });
+      } else {
+        editor.classList.add('hidden');
+      }
+    }
+
+    if (editLink) {
+      editLink.addEventListener('click', () => toggleEditor());
+      editLink.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleEditor(); }
+      });
+    }
+
+    /* Sidebar sliders: the Pomodoro break is a real preference, so persist it. */
+    const breakSlider = document.getElementById('breakLengthRange');
+    if (breakSlider) {
+      breakSlider.addEventListener('change', () => {
+        const prefs = window.cpUI.get().prefs;
+        persistStudy({
+          target: prefs.target,
+          breakMin: Number(breakSlider.value),
+          start: prefs.start,
+          end: prefs.end,
+          maxFocus: prefs.maxFocus,
+        });
+      });
+    }
+    const hoursSlider = document.getElementById('studyHoursRange');
+    if (hoursSlider) {
+      hoursSlider.addEventListener('change', () => {
+        window.cpUI.set('prefs.target', Number(hoursSlider.value));
+        syncSidebar();
+      });
+    }
+
+    /* ---------- boot ---------- */
+    bindControls();
+    refresh();
+    /* Seed the local prefs from whatever the server already has. */
+    window.addEventListener('load', async () => {
+      /* The server owns the study preferences; mirror them locally so the
+         panel opens showing the truth rather than stale defaults. */
+      try {
+        const res = await fetch('/state', { headers: { Accept: 'application/json' } });
+        if (res.ok) {
+          const state = await res.json();
+          const server = state.preferences || {};
+          const prefs = window.cpUI.get().prefs;
+          if (server.daily_start_time) window.cpUI.set('prefs.start', server.daily_start_time);
+          if (server.daily_end_time) window.cpUI.set('prefs.end', server.daily_end_time);
+          if (server.preferred_break_minutes) window.cpUI.set('prefs.break', server.preferred_break_minutes);
+          if (server.max_focus_minutes) window.cpUI.set('prefs.maxFocus', server.max_focus_minutes);
+          refresh();
+        }
+      } catch (err) { /* offline: local defaults stand in */ }
+      syncSidebar();
+      const camera = document.getElementById('cameraToggle');
+      if (camera && window.cpUI.get().a11y.cameraOff) camera.checked = false;
+    });
+
+    window.cpSettings = { open, close, get isOpen() { return isOpen; }, persistStudy, syncSidebar };
   })();
   </script>
 </body>

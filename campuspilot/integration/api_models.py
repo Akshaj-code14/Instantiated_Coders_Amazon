@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictRequest(BaseModel):
@@ -46,6 +46,22 @@ class CheckinRequest(StrictRequest):
         "Completed", "Partially completed", "Partial", "Needed help"
     ]
     mood: Literal["Drained", "Okay", "Stressed", "Overwhelmed"] | None = None
+
+
+class PreferencesRequest(StrictRequest):
+    """Study preferences the sidebar edits. Mirrors the existing columns."""
+
+    daily_start_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    daily_end_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    preferred_break_minutes: int | None = Field(default=None, ge=5, le=30)
+    max_focus_minutes: int | None = Field(default=None, ge=15, le=90)
+
+    @model_validator(mode="after")
+    def check_window(self):
+        if self.daily_start_time and self.daily_end_time:
+            if self.daily_start_time >= self.daily_end_time:
+                raise ValueError("The planning window must start before it ends.")
+        return self
 
 
 class ToolCallOut(BaseModel):

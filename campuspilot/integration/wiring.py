@@ -305,6 +305,38 @@ def cancel_pending_plan(student_id: str, plan_id: str) -> bool:
     return cursor.rowcount > 0
 
 
+def update_preferences(student_id: str, **fields: object) -> dict:
+    """Persist the editable study preferences. No schema change: the
+    table already holds these columns, it just had no write path."""
+    allowed = {
+        "daily_start_time",
+        "daily_end_time",
+        "preferred_break_minutes",
+        "max_focus_minutes",
+    }
+    updates = {key: value for key, value in fields.items() if key in allowed and value is not None}
+    if not updates:
+        return {}
+    assignments = ", ".join(f"{key} = ?" for key in updates)
+    values = list(updates.values()) + [student_id]
+    with get_connection() as connection:
+        with transaction(connection):
+            connection.execute(
+                f"UPDATE preferences SET {assignments} WHERE student_id = ?",
+                values,
+            )
+        row = connection.execute(
+            """
+            SELECT daily_start_time, daily_end_time,
+                   preferred_break_minutes, max_focus_minutes
+            FROM preferences
+            WHERE student_id = ?
+            """,
+            (student_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
 def owned_task(student_id: str, task_id: str) -> bool:
     with get_connection() as connection:
         row = connection.execute(
