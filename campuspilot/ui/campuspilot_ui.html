@@ -488,6 +488,53 @@
   html:not(.dark) #cpCursorGlow{mix-blend-mode:multiply; opacity:.32}
   html.cp-cursor-on,html.cp-cursor-on *{cursor:none!important}
 
+  /* ---- Pomodoro floating window (module 3) ---- */
+  #cpPomodoro{
+    position:fixed; z-index:40; width:272px; display:none;
+    background:rgba(15,23,42,.78); border:1px solid rgb(var(--cp-glow) / .38);
+    border-radius:20px; box-shadow:0 24px 60px rgba(0,0,0,.5);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    opacity:.9; transition:opacity .18s ease, box-shadow .18s ease;
+    color:#e2e8f0; overflow:hidden;
+  }
+  #cpPomodoro.cp-open{display:block}
+  #cpPomodoro:hover,#cpPomodoro:focus-within{opacity:1; box-shadow:0 28px 70px rgba(0,0,0,.6)}
+  html:not(.dark) #cpPomodoro{background:rgba(255,255,255,.86); color:#0f172a; border-color:rgb(var(--cp-glow) / .45)}
+  .cp-pomo-head{display:flex; align-items:center; gap:6px; padding:9px 10px; cursor:grab; touch-action:none; border-bottom:1px solid rgba(148,163,184,.18)}
+  .cp-pomo-head.cp-grabbing{cursor:grabbing}
+  .cp-pomo-title{font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:rgb(var(--cp-grid))}
+  .cp-pomo-task{font-size:10px; opacity:.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:96px}
+  .cp-pomo-spacer{flex:1}
+  .cp-pomo-head button{width:22px;height:22px;display:grid;place-items:center;border-radius:7px;background:rgba(148,163,184,.14);color:inherit;border:0;cursor:pointer}
+  .cp-pomo-head button:hover{background:rgba(148,163,184,.3)}
+  .cp-pomo-body{padding:12px 14px 14px}
+  .cp-ringwrap{position:relative;width:150px;height:150px;margin:2px auto 8px}
+  .cp-ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+  .cp-ring circle{fill:none;stroke-width:7}
+  .cp-ring-bg{stroke:rgba(148,163,184,.22)}
+  .cp-ring-fg{stroke:rgb(var(--cp-glow));stroke-linecap:round;transition:stroke-dashoffset .3s linear}
+  .cp-time{position:absolute;inset:0;display:grid;place-items:center}
+  .cp-digits{display:flex; align-items:center; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:33px; font-weight:600; line-height:1; letter-spacing:.01em}
+  .cp-digit{display:inline-block; width:.63em; height:1em; overflow:hidden; text-align:center}
+  .cp-digit-track{display:flex; flex-direction:column; transition:transform .38s cubic-bezier(.22,1,.36,1)}
+  .cp-digit-track>span{height:1em; line-height:1; display:block}
+  .cp-colon{width:.32em; text-align:center; opacity:.7}
+  .cp-modes{display:flex; gap:4px; padding:3px; border-radius:10px; background:rgba(148,163,184,.12); margin-bottom:10px}
+  .cp-modes button{flex:1; padding:5px 4px; font-size:10px; font-weight:600; border:0; border-radius:8px; background:transparent; color:inherit; opacity:.65; cursor:pointer}
+  .cp-modes button[aria-pressed="true"]{background:rgb(var(--cp-glow) / .85); color:#fff; opacity:1}
+  .cp-controls{display:flex; align-items:center; justify-content:center; gap:8px}
+  .cp-controls button{border:0; cursor:pointer; color:inherit; border-radius:11px; display:grid; place-items:center}
+  .cp-btn-main{width:54px; height:38px; background:rgb(var(--cp-glow) / .9); color:#fff}
+  .cp-btn-main:hover{filter:brightness(1.12)}
+  .cp-btn-ghost{width:34px; height:34px; background:rgba(148,163,184,.16)}
+  .cp-btn-ghost:hover{background:rgba(148,163,184,.3)}
+  .cp-checkin{margin-top:10px; font-size:11px; display:none; align-items:center; gap:6px; justify-content:center; flex-wrap:wrap}
+  .cp-checkin.cp-show{display:flex}
+  .cp-checkin button{font-size:11px; font-weight:700; padding:4px 9px; border-radius:8px; border:0; background:rgb(var(--cp-glow) / .85); color:#fff; cursor:pointer}
+  /* per-task start-focus button injected into task cards */
+  .cp-startfocus{display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:8px; font-size:10px; font-weight:600; border:1px solid rgb(var(--cp-glow) / .45); background:rgb(var(--cp-glow) / .16); color:rgb(var(--cp-grid)); cursor:pointer}
+  .cp-startfocus:hover{background:rgb(var(--cp-glow) / .3)}
+
   /* Visible keyboard focus for every new control */
   .cp-focusable:focus-visible,
   #cpSettingsDrawer :focus-visible,
@@ -2807,6 +2854,464 @@
     }, 400);
 
     setEnabled(Boolean(settings().on));
+  })();
+
+  /* ============================================================
+     MODULE 3 — Pomodoro floating window
+     In-page, draggable, translucent. The clock is computed from
+     timestamps (endsAt) rather than counted ticks, so it stays correct
+     in a background tab and across a refresh.
+
+     Countdown inspired by Skiper UI AnimatedNumber (@gurvinder-singh02),
+     free-version attribution. @number-flow/react is React-only, so the
+     same roll-up digit effect is done here with CSS transforms.
+     ============================================================ */
+  (function () {
+    'use strict';
+    if (!window.cpUI) return;
+
+    const ICONS = {
+      play: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5.1v13.8L19 12z"/></svg>',
+      pause: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>',
+      reset: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.8-6.3"/><path d="M3 4.5V9h4.5"/></svg>',
+      skip: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M6 5l8 7-8 7z"/><path d="M16 5h2v14h-2z"/></svg>',
+      min: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>',
+      close: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+      up: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 14l6-6 6 6"/></svg>',
+    };
+
+    const panel = document.createElement('section');
+    panel.id = 'cpPomodoro';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Pomodoro timer');
+    panel.innerHTML = [
+      '<div class="cp-pomo-head" data-drag-handle>',
+      '  <span class="cp-pomo-title">Pomodoro</span>',
+      '  <span class="cp-pomo-task" data-el="task"></span>',
+      '  <span class="cp-pomo-spacer"></span>',
+      '  <button type="button" data-act="minimize" aria-label="Minimize timer" title="Minimize" data-magnetic>', ICONS.min, '</button>',
+      '  <button type="button" data-act="close" aria-label="Close timer" title="Close" data-magnetic>', ICONS.close, '</button>',
+      '</div>',
+      '<div class="cp-pomo-body">',
+      '  <div class="cp-ringwrap">',
+      '    <svg class="cp-ring" viewBox="0 0 120 120" aria-hidden="true">',
+      '      <circle class="cp-ring-bg" cx="60" cy="60" r="52"></circle>',
+      '      <circle class="cp-ring-fg" data-el="ring" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="0"></circle>',
+      '    </svg>',
+      '    <div class="cp-time"><div class="cp-digits" data-el="digits" aria-live="off" role="timer"></div></div>',
+      '  </div>',
+      '  <div class="cp-modes" role="group" aria-label="Timer mode">',
+      '    <button type="button" data-mode="focus" aria-pressed="true">Focus</button>',
+      '    <button type="button" data-mode="short" aria-pressed="false">Short</button>',
+      '    <button type="button" data-mode="long" aria-pressed="false">Long</button>',
+      '  </div>',
+      '  <div class="cp-controls">',
+      '    <button type="button" class="cp-btn-ghost" data-act="reset" aria-label="Reset timer" title="Reset" data-magnetic>', ICONS.reset, '</button>',
+      '    <button type="button" class="cp-btn-main" data-act="toggle" aria-label="Start timer" title="Start" data-magnetic><span data-el="toggle-icon">', ICONS.play, '</span></button>',
+      '    <button type="button" class="cp-btn-ghost" data-act="skip" aria-label="Skip to next phase" title="Skip" data-magnetic>', ICONS.skip, '</button>',
+      '  </div>',
+      '  <div class="cp-checkin" data-el="checkin">',
+      '    <span>Focus done.</span><button type="button" data-act="checkin">Log check-in?</button>',
+      '  </div>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(panel);
+
+    const el = {
+      task: panel.querySelector('[data-el="task"]'),
+      digits: panel.querySelector('[data-el="digits"]'),
+      ring: panel.querySelector('[data-el="ring"]'),
+      toggleIcon: panel.querySelector('[data-el="toggle-icon"]'),
+      toggleBtn: panel.querySelector('[data-act="toggle"]'),
+      checkin: panel.querySelector('[data-el="checkin"]'),
+      head: panel.querySelector('[data-drag-handle]'),
+      body: panel.querySelector('.cp-pomo-body'),
+    };
+
+    const CIRC = 2 * Math.PI * 52;
+    const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+    function cfg() { return window.cpUI.get().pomodoro; }
+    function pref() { return window.cpUI.get().prefs; }
+
+    function durationFor(mode) {
+      const c = cfg();
+      if (mode === 'short') return clamp(Number(c.short) || 5, 1, 60);
+      if (mode === 'long') return clamp(Number(c.long) || 15, 1, 90);
+      /* Focus: the student's max-focus cap wins over the pomodoro default. */
+      return clamp(Math.min(Number(c.focus) || 25, Number(pref().maxFocus) || 90), 5, 90);
+    }
+
+    function durationMs() { return durationFor(rt.mode) * 60000; }
+
+    let rt = window.cpUI.get().runtime.pomo || {
+      mode: 'focus', endsAt: null, running: false,
+      remainingMs: 0, round: 0, task: null,
+      hidden: true, minimized: false, prompt: false,
+    };
+    if (!rt.remainingMs) rt.remainingMs = durationMs();
+
+    let pos = window.cpUI.get().runtime.pomoPos || null;
+
+    function persist() {
+      window.cpUI.set('runtime.pomo', rt);
+    }
+
+    /* ---------- digits ---------- */
+    const tracks = [];
+    (function buildDigits() {
+      el.digits.innerHTML = '';
+      'MM:SS'.split('').forEach((ch) => {
+        if (ch === ':') {
+          const colon = document.createElement('span');
+          colon.className = 'cp-colon';
+          colon.textContent = ':';
+          el.digits.appendChild(colon);
+          return;
+        }
+        const cell = document.createElement('span');
+        cell.className = 'cp-digit';
+        const track = document.createElement('span');
+        track.className = 'cp-digit-track';
+        for (let d = 0; d < 10; d += 1) {
+          const digit = document.createElement('span');
+          digit.textContent = String(d);
+          track.appendChild(digit);
+        }
+        cell.appendChild(track);
+        el.digits.appendChild(cell);
+        tracks.push(track);
+      });
+    })();
+
+    function mmss(ms) {
+      const total = Math.max(0, Math.round(ms / 1000));
+      const m = Math.floor(total / 60);
+      const s = total % 60;
+      return String(Math.min(99, m)).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function paintTime() {
+      const text = mmss(rt.remainingMs);
+      let index = 0;
+      text.split('').forEach((ch) => {
+        if (ch === ':') return;
+        const track = tracks[index];
+        index += 1;
+        /* each digit is exactly 1em tall, so shift by -N em — a percentage
+           here would resolve against the whole 10-digit strip. */
+        if (track) track.style.transform = 'translateY(-' + Number(ch) + 'em)';
+      });
+      el.digits.setAttribute('aria-label', text + ' remaining');
+      const ratio = durationMs() > 0 ? clamp(rt.remainingMs / durationMs(), 0, 1) : 0;
+      el.ring.setAttribute('stroke-dashoffset', String(CIRC * (1 - ratio)));
+    }
+
+    function render() {
+      panel.style.display = rt.hidden ? 'none' : 'block';
+      panel.classList.toggle('cp-open', !rt.hidden);
+      el.task.textContent = rt.mode === 'focus' && rt.task ? rt.task : '';
+      el.toggleIcon.innerHTML = rt.running ? ICONS.pause : ICONS.play;
+      el.toggleBtn.setAttribute('aria-label', rt.running ? 'Pause timer' : 'Start timer');
+      el.toggleBtn.title = rt.running ? 'Pause' : 'Start';
+      panel.querySelectorAll('[data-mode]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', btn.dataset.mode === rt.mode ? 'true' : 'false');
+      });
+      el.checkin.classList.toggle('cp-show', Boolean(rt.prompt));
+      const minBtn = panel.querySelector('[data-act="minimize"]');
+      if (minBtn) {
+        minBtn.innerHTML = rt.minimized ? ICONS.up : ICONS.min;
+        minBtn.setAttribute('aria-label', rt.minimized ? 'Expand timer' : 'Minimize timer');
+      }
+      el.body.style.display = rt.minimized ? 'none' : 'block';
+      panel.style.width = rt.minimized ? 'auto' : '272px';
+      paintTime();
+    }
+
+    /* ---------- position ---------- */
+    function clampPos(x, y) {
+      const w = panel.offsetWidth || 272;
+      const h = panel.offsetHeight || 300;
+      return {
+        x: clamp(x, 8, Math.max(8, window.innerWidth - w - 8)),
+        y: clamp(y, 8, Math.max(8, window.innerHeight - h - 8)),
+      };
+    }
+
+    function applyPos() {
+      if (!pos) {
+        const w = panel.offsetWidth || 272;
+        const h = panel.offsetHeight || 300;
+        pos = clampPos(window.innerWidth - w - 24, window.innerHeight - h - 96);
+      }
+      panel.style.left = pos.x + 'px';
+      panel.style.top = pos.y + 'px';
+    }
+
+    window.addEventListener('resize', () => {
+      pos = clampPos(pos ? pos.x : 40, pos ? pos.y : 40);
+      applyPos();
+    });
+
+    let drag = null;
+    el.head.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      const box = panel.getBoundingClientRect();
+      drag = { dx: event.clientX - box.left, dy: event.clientY - box.top };
+      el.head.classList.add('cp-grabbing');
+      el.head.setPointerCapture(event.pointerId);
+      document.dispatchEvent(new CustomEvent('campuspilot:dragging', { detail: { on: true } }));
+    });
+    el.head.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      pos = clampPos(event.clientX - drag.dx, event.clientY - drag.dy);
+      applyPos();
+    });
+    function endDrag() {
+      if (!drag) return;
+      drag = null;
+      el.head.classList.remove('cp-grabbing');
+      document.dispatchEvent(new CustomEvent('campuspilot:dragging', { detail: { on: false } }));
+      window.cpUI.set('runtime.pomoPos', pos);
+    }
+    el.head.addEventListener('pointerup', endDrag);
+    el.head.addEventListener('pointercancel', endDrag);
+
+    /* ---------- sound + notification ---------- */
+    let audioCtx = null;
+    function chime() {
+      if (!cfg().sound) return;
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return;
+      try {
+        audioCtx = audioCtx || new Ctor();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        [880, 1174.66].forEach((freq, index) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          const at = audioCtx.currentTime + index * 0.16;
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, at);
+          gain.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(at);
+          osc.stop(at + 0.55);
+        });
+      } catch (err) { /* audio is best-effort */ }
+    }
+
+    function askNotify() {
+      if (!cfg().notify || !('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        try { Notification.requestPermission(); } catch (err) { /* ignore */ }
+      }
+    }
+
+    function notify(title, body) {
+      if (!cfg().notify || !('Notification' in window)) return;
+      if (Notification.permission !== 'granted') return;
+      try { new Notification(title, { body, silent: true }); } catch (err) { /* ignore */ }
+    }
+
+    function toast(msg, kind) {
+      if (typeof window.showToast === 'function') window.showToast(msg, kind);
+    }
+
+    /* ---------- state machine ---------- */
+    function start() {
+      if (rt.running) return;
+      askNotify();
+      rt.endsAt = Date.now() + Math.max(1000, rt.remainingMs || durationMs());
+      rt.running = true;
+      rt.prompt = false;
+      persist();
+      render();
+    }
+
+    function pause() {
+      if (!rt.running) return;
+      rt.remainingMs = Math.max(0, rt.endsAt - Date.now());
+      rt.running = false;
+      rt.endsAt = null;
+      persist();
+      render();
+    }
+
+    function reset() {
+      rt.running = false;
+      rt.endsAt = null;
+      rt.remainingMs = durationMs();
+      persist();
+      render();
+    }
+
+    function setMode(mode) {
+      rt.mode = mode;
+      rt.running = false;
+      rt.endsAt = null;
+      rt.remainingMs = durationFor(mode) * 60000;
+      rt.prompt = false;
+      if (mode !== 'focus') rt.task = null;
+      persist();
+      render();
+    }
+
+    function finish(skipped) {
+      const wasFocus = rt.mode === 'focus';
+      rt.running = false;
+      rt.endsAt = null;
+      rt.remainingMs = 0;
+      if (!skipped) {
+        chime();
+        notify(wasFocus ? 'Focus session complete' : 'Break over', wasFocus ? 'Time for a break.' : 'Back to focus when you are ready.');
+        toast(wasFocus ? 'Focus session complete — time for a break.' : 'Break finished.', 'ok');
+      }
+      if (wasFocus && !skipped) rt.round = (rt.round || 0) + 1;
+      rt.prompt = wasFocus && !skipped;
+      const rounds = clamp(Number(cfg().rounds) || 4, 2, 8);
+      const next = wasFocus ? ((rt.round % rounds === 0) ? 'long' : 'short') : 'focus';
+      rt.mode = next;
+      rt.remainingMs = durationFor(next) * 60000;
+      if (next !== 'focus') rt.task = null;
+      persist();
+      render();
+      if (cfg().autoStart && !skipped) start();
+    }
+
+    function tick() {
+      if (!rt.running || rt.endsAt == null) return;
+      rt.remainingMs = Math.max(0, rt.endsAt - Date.now());
+      paintTime();
+      if (rt.remainingMs <= 0) finish(false);
+    }
+    setInterval(tick, 250);
+
+    /* ---------- open / close ---------- */
+    function open(taskLabel) {
+      if (taskLabel) {
+        rt.task = taskLabel;
+        rt.mode = 'focus';
+        rt.remainingMs = durationFor('focus') * 60000;
+        rt.running = false;
+        rt.endsAt = null;
+        rt.prompt = false;
+      }
+      rt.hidden = false;
+      rt.minimized = false;
+      persist();
+      applyPos();
+      render();
+    }
+
+    function hide() {
+      rt.hidden = true;
+      persist();
+      render();
+    }
+
+    function close() {
+      rt.running = false;
+      rt.endsAt = null;
+      rt.remainingMs = durationMs();
+      rt.hidden = true;
+      rt.prompt = false;
+      persist();
+      render();
+      toast('Timer stopped.');
+    }
+
+    function toggleVisible() {
+      if (rt.hidden) open(); else hide();
+    }
+
+    panel.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-act]');
+      if (action) {
+        const act = action.dataset.act;
+        if (act === 'toggle') { rt.running ? pause() : start(); }
+        else if (act === 'reset') { reset(); }
+        else if (act === 'skip') { finish(true); }
+        else if (act === 'close') { close(); }
+        else if (act === 'minimize') { rt.minimized = !rt.minimized; persist(); render(); applyPos(); }
+        else if (act === 'checkin') {
+          rt.prompt = false;
+          persist();
+          render();
+          const jump = document.getElementById('jumpToCheckInBtn');
+          if (jump) jump.click();
+        }
+        return;
+      }
+      const modeBtn = event.target.closest('[data-mode]');
+      if (modeBtn) setMode(modeBtn.dataset.mode);
+    });
+
+    /* P toggles the window, but never while the student is typing. */
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'p' && event.key !== 'P') return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      toggleVisible();
+    });
+
+    /* ---------- per-task "Start focus" ---------- */
+    function decorateCards() {
+      document.querySelectorAll('[data-task-id]').forEach((card) => {
+        if (card.querySelector('[data-cp-focus]')) return;
+        const titleEl = card.querySelector('h3');
+        const title = titleEl ? titleEl.textContent.trim() : 'this task';
+        const host = card.querySelector('button') ? card.querySelector('button').parentElement : null;
+        if (!host) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.cpFocus = '1';
+        btn.className = 'cp-startfocus';
+        btn.setAttribute('data-magnetic', '');
+        btn.setAttribute('aria-label', 'Start a focus session for ' + title);
+        btn.title = 'Start a focus session for ' + title;
+        btn.innerHTML = ICONS.play + '<span>Start focus</span>';
+        btn.addEventListener('click', (event) => { event.stopPropagation(); open(title); });
+        host.appendChild(btn);
+      });
+    }
+    decorateCards();
+    new MutationObserver(decorateCards).observe(document.body, { childList: true, subtree: true });
+
+    /* ---------- react to settings changes ---------- */
+    document.addEventListener('campuspilot:ui', (event) => {
+      const path = (event.detail && event.detail.path) || '';
+      if (path.indexOf('runtime') === 0) return;
+      if (path.indexOf('pomodoro') === 0 || path.indexOf('prefs') === 0) {
+        if (!rt.running) rt.remainingMs = durationMs();
+        render();
+      }
+    });
+
+    /* ---------- restore after a refresh ---------- */
+    if (rt.running && rt.endsAt) {
+      const left = rt.endsAt - Date.now();
+      if (left > 0) {
+        rt.remainingMs = left;
+        if (!rt.hidden) { applyPos(); }
+      } else {
+        finish(false);
+      }
+    }
+    applyPos();
+    render();
+
+    window.cpPomodoro = {
+      open, hide, close, toggle: toggleVisible,
+      start, pause, reset, finish,
+      /* exposed so the settings panel can repaint, and so the timer can be
+         stepped deterministically in tests (throttled tabs skip intervals). */
+      tick,
+      get state() { return rt; },
+    };
   })();
   </script>
 </body>
