@@ -535,6 +535,32 @@
   .cp-startfocus{display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:8px; font-size:10px; font-weight:600; border:1px solid rgb(var(--cp-glow) / .45); background:rgb(var(--cp-glow) / .16); color:rgb(var(--cp-grid)); cursor:pointer}
   .cp-startfocus:hover{background:rgb(var(--cp-glow) / .3)}
 
+  /* ---- Chat composer (module 4) ---- */
+  #chatInput{max-height:144px; min-height:46px}
+  #chatForm button:focus-visible{outline:2px solid rgb(var(--cp-glow)); outline-offset:2px}
+  #cpEmojiPop{
+    position:fixed; z-index:60; width:246px; padding:8px;
+    display:grid; grid-template-columns:repeat(8,1fr); gap:2px;
+    background:rgba(15,23,42,.97); border:1px solid rgb(var(--cp-glow) / .4);
+    border-radius:14px; box-shadow:0 18px 44px rgba(0,0,0,.55);
+  }
+  #cpEmojiPop[hidden]{display:none}
+  #cpEmojiPop button{
+    font-size:17px; line-height:1; padding:5px; border:0; border-radius:8px;
+    background:transparent; cursor:pointer;
+  }
+  #cpEmojiPop button:hover,#cpEmojiPop button:focus-visible{background:rgb(var(--cp-glow) / .32)}
+  .cp-attach-chip{
+    display:inline-flex; align-items:center; gap:6px; max-width:220px;
+    padding:3px 6px; border-radius:9px; font-size:11px;
+    background:rgb(var(--cp-glow) / .16); border:1px solid rgb(var(--cp-glow) / .35);
+    color:rgb(var(--cp-grid));
+  }
+  .cp-attach-chip img{width:22px; height:22px; object-fit:cover; border-radius:5px}
+  .cp-attach-chip span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .cp-attach-chip button{border:0; background:transparent; cursor:pointer; color:inherit; font-size:13px; line-height:1; padding:0 2px; opacity:.75}
+  .cp-attach-chip button:hover{opacity:1}
+
   /* Visible keyboard focus for every new control */
   .cp-focusable:focus-visible,
   #cpSettingsDrawer :focus-visible,
@@ -1147,18 +1173,33 @@
           </div>
           <!-- Chat Input Bar with Feature 3 Animated Send Button -->
           <div class="p-4 border-t border-white/10 bg-white/[0.02]">
-            <form class="flex items-center gap-2" id="chatForm">
-              <button aria-label="Toggle voice input" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all relative" id="micBtn" title="Hold or click to voice speak" type="button">
-                <i class="w-4 h-4" data-lucide="mic" id="micIcon"></i>
-              </button>
-              <div class="relative flex-1">
-                <input class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all" id="chatInput" placeholder="Ask CampusPilot anything (e.g. 'Reschedule Java practice to Sunday morning')..." type="text"/>
+            <form class="flex flex-col gap-2" id="chatForm">
+              <!-- attachment chips (module 4) -->
+              <div class="flex flex-wrap items-center gap-1.5 hidden" id="cpAttachBar"></div>
+              <div class="flex items-end gap-2">
+                <button aria-label="Toggle voice input" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all relative" id="micBtn" title="Click to dictate" type="button">
+                  <i class="w-4 h-4" data-lucide="mic" id="micIcon"></i>
+                </button>
+                <div class="relative flex-1">
+                  <textarea class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none leading-relaxed overflow-y-auto" id="chatInput" placeholder="Ask CampusPilot anything (e.g. 'Reschedule Java practice to Sunday morning')..." rows="1"></textarea>
+                </div>
+                <button aria-label="Insert emoji" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all" id="cpEmojiBtn" title="Emoji" type="button">
+                  <i class="w-4 h-4" data-lucide="smile"></i>
+                </button>
+                <button aria-label="Attach a file" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all" id="cpAttachBtn" title="Attach file" type="button">
+                  <i class="w-4 h-4" data-lucide="paperclip"></i>
+                </button>
+                <button aria-label="Attach an image" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all" id="cpImageBtn" title="Attach image" type="button">
+                  <i class="w-4 h-4" data-lucide="image"></i>
+                </button>
+                <!-- Animated Send Button -->
+                <button class="chat-send-btn px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-semibold text-sm shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed" id="chatSubmitBtn" type="submit">
+                  <span class="tracking-wide">Send</span>
+                  <i class="w-4 h-4 send-icon transition-transform duration-300" data-lucide="send"></i>
+                </button>
               </div>
-              <!-- Animated Send Button -->
-              <button class="chat-send-btn px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-semibold text-sm shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-all cursor-pointer" id="chatSubmitBtn" type="submit">
-                <span class="tracking-wide">Send</span>
-                <i class="w-4 h-4 send-icon transition-transform duration-300" data-lucide="send"></i>
-              </button>
+              <input accept=".pdf,.txt,.md,.csv,.doc,.docx,.json" class="hidden" id="cpFilePicker" multiple="" type="file"/>
+              <input accept="image/*" class="hidden" id="cpImagePicker" multiple="" type="file"/>
             </form>
           </div>
         </section>
@@ -1698,28 +1739,56 @@
       if (!SpeechRec) { showToast('Voice input is not supported in this browser. Use Chrome or Edge, or type your message.', 'err'); return; }
       if (isListening && recognition) { recognition.stop(); return; }
       recognition = new SpeechRec();
-      recognition.lang = langMap[languageSelect.value] || 'en-US';
-      recognition.interimResults = false;
+      recognition.lang = voiceLang();
+      recognition.interimResults = true;
+      recognition.continuous = false;
       recognition.onstart = () => setListeningUI(true);
-      recognition.onend = () => setListeningUI(false);
+      recognition.onend = () => {
+        setListeningUI(false);
+        if (chatInput.value.trim()) chatInput.focus();
+        if (window.cpChat) window.cpChat.syncSendState();
+      };
       recognition.onerror = (e) => {
         setListeningUI(false);
         const msg = e.error === 'not-allowed' ? 'Microphone permission was blocked. Allow it in the browser, or type instead.' : 'I could not hear that. Please try again or type your message.';
         showToast(msg, 'err');
       };
+      /* Live interim text lands in the box; nothing is sent until the
+         student presses Send, so a wrong transcript is editable. */
       recognition.onresult = (e) => {
-        const heard = e.results[0][0].transcript;
-        chatInput.value = heard;
-        sendMessage(heard);
+        let interim = '';
+        let finalText = '';
+        for (let i = e.resultIndex; i < e.results.length; i += 1) {
+          const chunk = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalText += chunk;
+          else interim += chunk;
+        }
+        chatInput.value = (finalText || interim).trim();
+        if (window.cpChat) { window.cpChat.autoGrow(); window.cpChat.syncSendState(); }
       };
       try { recognition.start(); } catch (err) { setListeningUI(false); }
     });
 
+    /* Settings own the voice language; the header select is the fallback. */
+    function voiceLang() {
+      if (window.cpUI) {
+        const lang = window.cpUI.get().voice.lang;
+        if (lang) return lang;
+      }
+      return langMap[languageSelect.value] || 'en-US';
+    }
+
+    function spokenRepliesOn() {
+      if (window.cpUI) return Boolean(window.cpUI.get().voice.readAloud);
+      return speakReplies;
+    }
+
     speakerBtn.addEventListener('click', () => {
-      speakReplies = !speakReplies;
+      speakReplies = !spokenRepliesOn();
       speakerBtn.setAttribute('aria-pressed', speakReplies ? 'true' : 'false');
       speakerIcon.setAttribute('data-lucide', speakReplies ? 'volume-2' : 'volume-x');
       if (!speakReplies && window.speechSynthesis) speechSynthesis.cancel();
+      if (window.cpUI) window.cpUI.set('voice.readAloud', speakReplies);
       lucide.createIcons();
       showToast(speakReplies ? 'Spoken replies on' : 'Spoken replies muted');
     });
@@ -1732,10 +1801,11 @@
     });
 
     function speak(text) {
-      if (!speakReplies || !voiceToggle.checked || !window.speechSynthesis) return;
+      if (!spokenRepliesOn() || !voiceToggle.checked || !window.speechSynthesis) return;
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = langMap[languageSelect.value] || 'en-US';
+      u.lang = voiceLang();
+      if (window.cpUI) u.rate = Number(window.cpUI.get().voice.rate) || 1;
       speechSynthesis.speak(u);
     }
 
@@ -3311,6 +3381,212 @@
          stepped deterministically in tests (throttled tabs skip intervals). */
       tick,
       get state() { return rt; },
+    };
+  })();
+
+  /* ============================================================
+     MODULE 4 — chat composer
+     Auto-growing textarea, emoji popover, file/image attachments and a
+     send button that knows when there is nothing to send.
+     ============================================================ */
+  (function () {
+    'use strict';
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('chatSubmitBtn');
+    const bar = document.getElementById('cpAttachBar');
+    const emojiBtn = document.getElementById('cpEmojiBtn');
+    const attachBtn = document.getElementById('cpAttachBtn');
+    const imageBtn = document.getElementById('cpImageBtn');
+    const filePicker = document.getElementById('cpFilePicker');
+    const imagePicker = document.getElementById('cpImagePicker');
+    if (!form || !input || !sendBtn) return;
+
+    const MAX_H = 144;
+    const files = [];
+    const images = [];
+
+    function autoGrow() {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, MAX_H) + 'px';
+      input.style.overflowY = input.scrollHeight > MAX_H ? 'auto' : 'hidden';
+    }
+
+    function syncSendState() {
+      const hasContent = input.value.trim().length > 0 || files.length > 0 || images.length > 0;
+      sendBtn.disabled = !hasContent;
+      sendBtn.setAttribute('aria-disabled', hasContent ? 'false' : 'true');
+    }
+
+    function prettySize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function renderChips() {
+      bar.innerHTML = '';
+      const total = files.length + images.length;
+      bar.classList.toggle('hidden', total === 0);
+      files.forEach((file, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'cp-attach-chip';
+        chip.innerHTML = '<span title="' + file.name.replace(/"/g, '') + '">📎 ' + file.name + ' · ' + prettySize(file.size) + '</span>';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', 'Remove attachment ' + file.name);
+        remove.addEventListener('click', () => { files.splice(index, 1); renderChips(); syncSendState(); });
+        chip.appendChild(remove);
+        bar.appendChild(chip);
+      });
+      images.forEach((item, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'cp-attach-chip';
+        const thumb = document.createElement('img');
+        thumb.src = item.url;
+        thumb.alt = '';
+        const label = document.createElement('span');
+        label.textContent = item.file.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', 'Remove image ' + item.file.name);
+        remove.addEventListener('click', () => {
+          URL.revokeObjectURL(item.url);
+          images.splice(index, 1);
+          renderChips();
+          syncSendState();
+        });
+        chip.appendChild(thumb);
+        chip.appendChild(label);
+        chip.appendChild(remove);
+        bar.appendChild(chip);
+      });
+    }
+
+    function clearAttachments() {
+      files.length = 0;
+      images.forEach((item) => URL.revokeObjectURL(item.url));
+      images.length = 0;
+      renderChips();
+      syncSendState();
+    }
+
+    input.addEventListener('input', () => { autoGrow(); syncSendState(); });
+
+    /* Enter sends, Shift+Enter adds a line. */
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (!sendBtn.disabled) form.requestSubmit();
+    });
+
+    attachBtn.addEventListener('click', () => filePicker.click());
+    imageBtn.addEventListener('click', () => imagePicker.click());
+    filePicker.addEventListener('change', () => {
+      Array.from(filePicker.files || []).forEach((file) => files.push(file));
+      filePicker.value = '';
+      renderChips();
+      syncSendState();
+    });
+    imagePicker.addEventListener('change', () => {
+      Array.from(imagePicker.files || []).forEach((file) => {
+        images.push({ file, url: URL.createObjectURL(file) });
+      });
+      imagePicker.value = '';
+      renderChips();
+      syncSendState();
+    });
+
+    /* ---------- emoji popover ---------- */
+    const EMOJI = ['😀', '🙂', '😌', '😍', '🤔', '😅', '😴', '🥳', '😮', '😭', '🔥', '✅', '📚', '📝', '⏰', '🎯', '💡', '🚀', '☕', '🎉', '👍', '🙏', '💪', '🧠', '📅', '⏳', '❓', '❤️', '😤', '🤯', '🌙', '🍀'];
+    let pop = null;
+
+    function closeEmoji() {
+      if (!pop) return;
+      pop.hidden = true;
+      emojiBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function buildPop() {
+      pop = document.createElement('div');
+      pop.id = 'cpEmojiPop';
+      pop.setAttribute('role', 'dialog');
+      pop.setAttribute('aria-label', 'Pick an emoji');
+      pop.hidden = true;
+      EMOJI.forEach((emoji) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = emoji;
+        btn.setAttribute('aria-label', 'Insert ' + emoji);
+        btn.addEventListener('click', () => {
+          const start = input.selectionStart ?? input.value.length;
+          const end = input.selectionEnd ?? input.value.length;
+          input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+          input.focus();
+          const caret = start + emoji.length;
+          input.setSelectionRange(caret, caret);
+          autoGrow();
+          syncSendState();
+          closeEmoji();
+        });
+        pop.appendChild(btn);
+      });
+      document.body.appendChild(pop);
+      document.addEventListener('pointerdown', (event) => {
+        if (pop.hidden) return;
+        if (pop.contains(event.target) || emojiBtn.contains(event.target)) return;
+        closeEmoji();
+      }, true);
+    }
+
+    emojiBtn.setAttribute('aria-expanded', 'false');
+    emojiBtn.setAttribute('aria-haspopup', 'dialog');
+    emojiBtn.addEventListener('click', () => {
+      if (!pop) buildPop();
+      if (!pop.hidden) { closeEmoji(); return; }
+      const rect = emojiBtn.getBoundingClientRect();
+      pop.hidden = false;
+      const width = 246;
+      const left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8);
+      const top = Math.max(8, rect.top - 8 - pop.offsetHeight);
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+      emojiBtn.setAttribute('aria-expanded', 'true');
+      const first = pop.querySelector('button');
+      if (first) first.focus();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeEmoji();
+    });
+
+    /* ---------- send: attachments ride along as a filename suffix ---------- */
+    const baseSend = window.sendMessage;
+    window.sendMessage = function sendWithAttachments(text, isRetry) {
+      const names = files.map((f) => f.name).concat(images.map((i) => i.file.name));
+      let payload = (text || '').trim();
+      if (names.length) {
+        /* The agent contract only takes text, so the filenames travel with
+           the message; the files themselves stay in the browser. */
+        payload = (payload ? payload + ' ' : '') + '[Attached: ' + names.join(', ') + ']';
+      }
+      if (!payload) return undefined;
+      clearAttachments();
+      return baseSend.call(this, payload, isRetry);
+    };
+
+    form.addEventListener('submit', () => {
+      setTimeout(() => { autoGrow(); syncSendState(); }, 0);
+    });
+
+    autoGrow();
+    syncSendState();
+    renderChips();
+
+    window.cpChat = {
+      autoGrow, syncSendState, clearAttachments,
+      get attachments() { return files.concat(images.map((i) => i.file)); },
     };
   })();
   </script>
