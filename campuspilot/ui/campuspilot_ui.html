@@ -561,6 +561,40 @@
   .cp-attach-chip button{border:0; background:transparent; cursor:pointer; color:inherit; font-size:13px; line-height:1; padding:0 2px; opacity:.75}
   .cp-attach-chip button:hover{opacity:1}
 
+  /* ---- Radial quick menu (module 5) ---- */
+  .cp-logo-btn{cursor:pointer; -webkit-tap-highlight-color:transparent}
+  .cp-logo-btn:focus-visible{outline:2px solid rgb(var(--cp-glow)); outline-offset:3px}
+  .cp-logo-open{animation:cpLogoPulse 1.9s ease-in-out infinite}
+  @keyframes cpLogoPulse{
+    0%,100%{box-shadow:0 0 0 3px rgb(var(--cp-glow) / .22), 0 0 16px 2px rgb(var(--cp-glow) / .35)}
+    50%{box-shadow:0 0 0 5px rgb(var(--cp-glow) / .3), 0 0 26px 8px rgb(var(--cp-glow) / .5)}
+  }
+  #cpRadialMenu{position:fixed;inset:0;z-index:50;display:none}
+  #cpRadialMenu.cp-open{display:block}
+  .cp-radial-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.42);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);opacity:0;transition:opacity .22s ease}
+  #cpRadialMenu.cp-open .cp-radial-backdrop{opacity:1}
+  .cp-radial-arc{position:absolute;pointer-events:none;overflow:visible}
+  .cp-radial-arc path{fill:none;stroke:rgb(var(--cp-glow) / .55);stroke-width:1.2;stroke-dasharray:3 5;opacity:0;transition:opacity .3s ease .06s}
+  #cpRadialMenu.cp-open .cp-radial-arc path{opacity:1}
+  .cp-radial-item{
+    position:absolute; width:42px; height:42px; border-radius:9999px; display:grid; place-items:center;
+    background:rgba(15,23,42,.9); border:1px solid rgb(var(--cp-glow) / .42); color:#e2e8f0;
+    cursor:pointer; opacity:0; transform:scale(.3) rotate(-18deg); filter:blur(5px);
+    transition:opacity .26s ease, transform .36s cubic-bezier(.18,1.32,.42,1), filter .24s ease, background .16s ease, color .16s ease;
+  }
+  #cpRadialMenu.cp-open .cp-radial-item{opacity:1; transform:scale(1) rotate(0deg); filter:blur(0)}
+  .cp-radial-item:hover,.cp-radial-item:focus-visible{background:rgb(var(--cp-glow) / .92); color:#fff}
+  .cp-radial-item[aria-pressed="true"]{border-color:rgb(var(--cp-glow)); box-shadow:inset 0 0 0 1px rgb(var(--cp-glow) / .6)}
+  html.cp-reduced-motion .cp-radial-item{transition:opacity .14s linear; transform:none}
+  .cp-radial-tip{
+    position:absolute; left:50%; top:-26px; transform:translateX(-50%); white-space:nowrap;
+    font-size:10px; font-weight:600; padding:3px 7px; border-radius:7px;
+    background:rgba(2,6,23,.96); border:1px solid rgb(var(--cp-glow) / .45); color:#e2e8f0;
+    opacity:0; pointer-events:none; transition:opacity .14s ease;
+  }
+  .cp-radial-tip.cp-show{opacity:1}
+  .cp-radial-tip kbd{font-family:ui-monospace,monospace; opacity:.65; margin-left:4px}
+
   /* Visible keyboard focus for every new control */
   .cp-focusable:focus-visible,
   #cpSettingsDrawer :focus-visible,
@@ -581,7 +615,9 @@
       <!-- Brand & Status -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25 ring-1 ring-white/20">
+          <!-- The logo doubles as the radial menu's centre button. Its markup,
+               size and gradient are untouched; only interaction is added. -->
+          <div aria-expanded="false" aria-haspopup="menu" aria-label="Open quick menu" class="cp-logo-btn w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25 ring-1 ring-white/20" id="cpLogoBtn" role="button" tabindex="0" title="Quick menu">
             <i class="w-6 h-6 text-white animate-bounce-subtle" data-lucide="compass"></i>
           </div>
           <div>
@@ -2535,6 +2571,7 @@
 
       html.classList.toggle('cp-large-text', Boolean(data.a11y.largeText));
       html.classList.toggle('cp-contrast', Boolean(data.a11y.contrast));
+      html.classList.toggle('cp-reduced-motion', reducedMotion());
       document.body.classList.toggle('cp-grid-off', data.grid.mode === 'off');
 
       const themeIcon = document.getElementById('themeIcon');
@@ -3588,6 +3625,196 @@
       autoGrow, syncSendState, clearAttachments,
       get attachments() { return files.concat(images.map((i) => i.file)); },
     };
+  })();
+
+  /* ============================================================
+     MODULE 5 — radial quick menu
+     The logo is in the top-left corner, so the ring is not centred on
+     the viewport: buttons fan out downward/right along an arc that is
+     sized from the live viewport, which keeps every item on screen.
+     ============================================================ */
+  (function () {
+    'use strict';
+    const logo = document.getElementById('cpLogoBtn');
+    if (!logo) return;
+
+    const SVGS = {
+      gear: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+      timer: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>',
+      spark: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>',
+      chat: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.2A8 8 0 1 1 21 12z"/></svg>',
+      mic: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+      cam: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 10l6-3v10l-6-3"/></svg>',
+      sun: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>',
+      check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    };
+
+    const ITEMS = [
+      { id: 'settings', label: 'Settings', hint: ',', icon: 'gear', run: () => { close(); if (window.cpSettings) window.cpSettings.open(); } },
+      { id: 'pomodoro', label: 'Pomodoro', hint: 'P', icon: 'timer', run: () => { close(); if (window.cpPomodoro) window.cpPomodoro.toggle(); } },
+      { id: 'newplan', label: 'New Plan', hint: 'N', icon: 'spark', run: () => { close(); const b = document.getElementById('openNewPlanBtn'); if (b) b.click(); } },
+      { id: 'chat', label: 'AI Chat', hint: 'C', icon: 'chat', run: () => { close(); if (typeof window.setActiveTab === 'function') window.setActiveTab('chat'); setTimeout(() => { const input = document.getElementById('chatInput'); if (input) input.focus(); }, 40); } },
+      { id: 'voice', label: 'Voice Mode', hint: 'V', icon: 'mic', toggle: 'voiceToggle' },
+      { id: 'camera', label: 'Camera', hint: '', icon: 'cam', toggle: 'cameraToggle' },
+      { id: 'theme', label: 'Theme', hint: 'T', icon: 'sun', run: () => { window.cpUI.toggleTheme(); paintToggles(); } },
+      { id: 'checkin', label: 'Check-in', hint: 'K', icon: 'check', run: () => { close(); const b = document.getElementById('jumpToCheckInBtn'); if (b) b.click(); } },
+    ];
+
+    let menu = null;
+    let items = [];
+    let isOpen = false;
+
+    function paintToggles() {
+      items.forEach((btn) => {
+        const item = ITEMS.find((entry) => entry.id === btn.dataset.item);
+        if (!item || !item.toggle) return;
+        const box = document.getElementById(item.toggle);
+        btn.setAttribute('aria-pressed', box && box.checked ? 'true' : 'false');
+      });
+      const themeBtn = items.find((b) => b.dataset.item === 'theme');
+      if (themeBtn) {
+        const dark = document.documentElement.classList.contains('dark');
+        themeBtn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+      }
+    }
+
+    function build() {
+      menu = document.createElement('div');
+      menu.id = 'cpRadialMenu';
+      menu.setAttribute('aria-hidden', 'true');
+      menu.innerHTML = '<div class="cp-radial-backdrop" data-close="1"></div><svg class="cp-radial-arc" aria-hidden="true"><path d=""></path></svg>';
+      document.body.appendChild(menu);
+
+      ITEMS.forEach((item) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cp-radial-item';
+        btn.dataset.item = item.id;
+        btn.setAttribute('data-magnetic', '');
+        btn.setAttribute('aria-label', item.label + (item.hint ? ' (' + item.hint + ')' : ''));
+        btn.innerHTML = SVGS[item.icon] + '<span class="cp-radial-tip" aria-hidden="true">' + item.label + (item.hint ? '<kbd>' + item.hint + '</kbd>' : '') + '</span>';
+        btn.addEventListener('click', () => {
+          if (item.toggle) {
+            const box = document.getElementById(item.toggle);
+            if (box) { box.checked = !box.checked; box.dispatchEvent(new Event('change', { bubbles: true })); }
+            paintToggles();
+            return;
+          }
+          item.run();
+        });
+        const tip = btn.querySelector('.cp-radial-tip');
+        const showTip = () => tip.classList.add('cp-show');
+        const hideTip = () => tip.classList.remove('cp-show');
+        btn.addEventListener('mouseenter', showTip);
+        btn.addEventListener('focus', showTip);
+        btn.addEventListener('mouseleave', hideTip);
+        btn.addEventListener('blur', hideTip);
+        menu.appendChild(btn);
+        items.push(btn);
+      });
+
+      menu.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('[data-close]')) close();
+      });
+
+      /* Tooltips also appear when the pointer is merely near a button. */
+      menu.addEventListener('pointermove', (event) => {
+        items.forEach((btn) => {
+          const box = btn.getBoundingClientRect();
+          const dist = Math.hypot(event.clientX - (box.left + box.width / 2), event.clientY - (box.top + box.height / 2));
+          const tip = btn.querySelector('.cp-radial-tip');
+          if (dist < box.width / 2 + 40) tip.classList.add('cp-show');
+          else if (document.activeElement !== btn && !btn.matches(':hover')) tip.classList.remove('cp-show');
+        });
+      });
+    }
+
+    function place() {
+      const rect = logo.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const count = items.length;
+      /* Radius is bounded by the space actually available right and below
+         the logo, so nothing is clipped on a narrow phone viewport. */
+      const radius = Math.max(96, Math.min(156, window.innerWidth - cx - 34, window.innerHeight - cy - 60));
+      const start = 6;
+      const end = 96;
+
+      items.forEach((btn, index) => {
+        const angle = (start + ((end - start) * index) / Math.max(1, count - 1)) * Math.PI / 180;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+        btn.style.left = Math.round(x - 21) + 'px';
+        btn.style.top = Math.round(y - 21) + 'px';
+      });
+
+      const arc = menu.querySelector('.cp-radial-arc');
+      arc.setAttribute('viewBox', '0 0 ' + window.innerWidth + ' ' + window.innerHeight);
+      arc.setAttribute('width', window.innerWidth);
+      arc.setAttribute('height', window.innerHeight);
+      const r = radius - 30;
+      const a0 = start * Math.PI / 180;
+      const a1 = end * Math.PI / 180;
+      const x0 = cx + Math.cos(a0) * r;
+      const y0 = cy + Math.sin(a0) * r;
+      const x1 = cx + Math.cos(a1) * r;
+      const y1 = cy + Math.sin(a1) * r;
+      arc.querySelector('path').setAttribute('d', 'M ' + x0 + ' ' + y0 + ' A ' + r + ' ' + r + ' 0 0 1 ' + x1 + ' ' + y1);
+    }
+
+    function open() {
+      if (!menu) build();
+      if (isOpen) return;
+      isOpen = true;
+      place();
+      menu.style.display = 'block';
+      void menu.offsetHeight; // commit the start state before animating
+      menu.classList.add('cp-open');
+      menu.setAttribute('aria-hidden', 'false');
+      logo.classList.add('cp-logo-open');
+      logo.setAttribute('aria-expanded', 'true');
+      paintToggles();
+      items.forEach((btn, index) => { btn.style.transitionDelay = (16 + index * 38) + 'ms'; });
+      if (items[0]) items[0].focus({ preventScroll: true });
+    }
+
+    function close() {
+      if (!menu || !isOpen) return;
+      isOpen = false;
+      items.forEach((btn, index) => { btn.style.transitionDelay = ((items.length - 1 - index) * 24) + 'ms'; });
+      menu.classList.remove('cp-open');
+      menu.setAttribute('aria-hidden', 'true');
+      logo.classList.remove('cp-logo-open');
+      logo.setAttribute('aria-expanded', 'false');
+      setTimeout(() => { if (!isOpen && menu) menu.style.display = 'none'; }, 340);
+      logo.focus({ preventScroll: true });
+    }
+
+    logo.addEventListener('click', () => { isOpen ? close() : open(); });
+    logo.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        isOpen ? close() : open();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) { close(); return; }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key === ',') { event.preventDefault(); close(); if (window.cpSettings) window.cpSettings.open(); return; }
+      const key = event.key.toLowerCase();
+      const byKey = { n: 'newplan', c: 'chat', t: 'theme', v: 'voice', k: 'checkin' };
+      const id = byKey[key];
+      if (!id) return;
+      event.preventDefault();
+      const item = ITEMS.find((entry) => entry.id === id);
+      if (item && item.run) item.run();
+    });
+
+    window.addEventListener('resize', () => { if (isOpen) place(); });
+    window.cpRadial = { open, close, get isOpen() { return isOpen; } };
   })();
   </script>
 </body>
