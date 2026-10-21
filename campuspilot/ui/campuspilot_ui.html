@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>CampusPilot - AI Academic Co-Pilot</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              blue: '#3b82f6',
+              purple: '#8b5cf6',
+              indigo: '#6366f1',
+              dark: '#070a13',
+            }
+          },
+          animation: {
+            'shimmer': 'shimmer 1.8s infinite linear',
+            'pulse-glow': 'pulseGlow 2.5s infinite ease-in-out',
+            'mic-pulse': 'micPulse 1.5s infinite ease-in-out',
+            'fade-up': 'fadeUp 0.35s ease-out forwards',
+            'bounce-subtle': 'bounceSubtle 2.5s infinite ease-in-out',
+          },
+          keyframes: {
+            shimmer: {
+              '0%': { transform: 'translateX(-100%)' },
+              '100%': { transform: 'translateX(100%)' },
+            },
+            pulseGlow: {
+              '0%, 100%': { boxShadow: '0 0 15px rgba(245, 158, 11, 0.25)', borderColor: 'rgba(245, 158, 11, 0.6)' },
+              '50%': { boxShadow: '0 0 25px rgba(245, 158, 11, 0.65)', borderColor: 'rgba(245, 158, 11, 1)' },
+            },
+            micPulse: {
+              '0%': { boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.6)' },
+              '70%': { boxShadow: '0 0 0 14px rgba(239, 68, 68, 0)' },
+              '100%': { boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)' },
+            },
+            fadeUp: {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            bounceSubtle: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-3px)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
+    /* Glassmorphism */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .light .glass-panel {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .glass-card {
+      background: rgba(30, 41, 59, 0.45);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .light .glass-card {
+      background: rgba(248, 250, 252, 0.85);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .bg-mesh {
+      background: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.16) 0px, transparent 50%),
+                  radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.16) 0px, transparent 50%),
+                  radial-gradient(at 50% 100%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                  #070a13;
+    }
+    .light .bg-mesh {
+      background: radial-gradient(at 0% 0%, rgba(191, 219, 254, 0.5) 0px, transparent 50%),
+                  radial-gradient(at 100% 0%, rgba(221, 214, 254, 0.5) 0px, transparent 50%),
+                  radial-gradient(at 50% 100%, rgba(224, 231, 255, 0.4) 0px, transparent 50%),
+                  #f1f5f9;
+    }
+
+    .pixel-grid-dots {
+      background-image: radial-gradient(rgba(139, 92, 246, 0.4) 1px, transparent 1px);
+      background-size: 8px 8px;
+    }
+
+    /* ============================================================== */
+    /* 1. ROPE CONNECTED FALL-DOWN CARDS & SUSPENSION RIG             */
+    /* ============================================================== */
+    .rope-rig-beam {
+      position: relative;
+      height: 12px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, #1e293b, #475569 25%, #94a3b8 50%, #475569 75%, #1e293b);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      margin-bottom: 24px;
+    }
+
+    .rope-card-wrapper {
+      position: relative;
+      transform-origin: 50% -30px;
+      will-change: transform, opacity;
+    }
+
+    /* Hanging braided rope cord */
+    .rope-card-wrapper .rope-line {
+      position: absolute;
+      top: -24px;
+      width: 3px;
+      height: 24px;
+      background: repeating-linear-gradient(
+        135deg,
+        #b45309 0px,
+        #d97706 2px,
+        #78350f 4px,
+        #b45309 6px
+      );
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+      z-index: 10;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .rope-card-wrapper .rope-line.left { left: 24px; }
+    .rope-card-wrapper .rope-line.right { right: 24px; }
+
+    /* Metallic anchor eyelet ring */
+    .rope-card-wrapper .rope-line::before {
+      content: "";
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 2px solid #94a3b8;
+      background: #0f172a;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    /* Clasp pin attached to card top */
+    .rope-card-wrapper .rope-line::after {
+      content: "";
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 7px;
+      height: 7px;
+      border-radius: 2px;
+      background: #f59e0b;
+      border: 1px solid #78350f;
+    }
+
+    /* Dynamic Drop Physics Keyframes */
+    @keyframes ropeDropSettling {
+      0% {
+        opacity: 0;
+        transform: translateY(-90px) scale(0.95) rotate(-4deg);
+      }
+      45% {
+        opacity: 1;
+        transform: translateY(14px) scale(1.02) rotate(3deg);
+      }
+      65% {
+        transform: translateY(-6px) scale(0.99) rotate(-1.5deg);
+      }
+      82% {
+        transform: translateY(3px) scale(1.005) rotate(0.8deg);
+      }
+      92% {
+        transform: translateY(-1px) scale(0.998) rotate(-0.3deg);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0deg);
+      }
+    }
+
+    @keyframes ropeSwayHover {
+      0%, 100% { transform: rotate(0deg) translateY(-2px); }
+      30% { transform: rotate(1.4deg) translateY(-3px); }
+      70% { transform: rotate(-1.2deg) translateY(-1px); }
+    }
+
+    .animate-rope-drop-p1 {
+      animation: ropeDropSettling 0.9s cubic-bezier(0.18, 0.89, 0.32, 1.28) 0.05s backwards;
+    }
+    .animate-rope-drop-p2 {
+      animation: ropeDropSettling 0.95s cubic-bezier(0.18, 0.89, 0.32, 1.28) 0.22s backwards;
+    }
+    .animate-rope-drop-p3 {
+      animation: ropeDropSettling 1.05s cubic-bezier(0.18, 0.89, 0.32, 1.28) 0.40s backwards;
+    }
+    .animate-rope-drop-p4 {
+      animation: ropeDropSettling 1.1s cubic-bezier(0.18, 0.89, 0.32, 1.28) 0.58s backwards;
+    }
+
+    .rope-card-wrapper:hover {
+      animation: ropeSwayHover 2.2s ease-in-out infinite;
+    }
+    .rope-card-wrapper:hover .rope-line {
+      filter: brightness(1.25);
+    }
+
+    /* ============================================================== */
+    /* 2. DAY TIMELINE - ORGANIC "TIME BRANCH" PATH STYLES            */
+    /* ============================================================== */
+    .branch-trunk-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px;
+      background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 35%, #ec4899 65%, #10b981 100%);
+      border-radius: 9999px;
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.55), 0 0 30px rgba(59, 130, 246, 0.35);
+      z-index: 1;
+    }
+    @media (max-width: 768px) {
+      .branch-trunk-line {
+        left: 28px;
+        transform: none;
+      }
+    }
+
+    .branch-event-node:hover .branch-card {
+      transform: translateY(-3px) scale(1.015);
+      box-shadow: 0 16px 30px -10px rgba(99, 102, 241, 0.35);
+    }
+    .branch-central-orb {
+      box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.9), 0 0 16px currentColor;
+      transition: transform 0.25s, box-shadow 0.25s;
+    }
+    .branch-event-node:hover .branch-central-orb {
+      transform: scale(1.3);
+    }
+
+    /* ============================================================== */
+    /* 3. AI CHAT DYNAMIC SEND BUTTON ANIMATION                      */
+    /* ============================================================== */
+    @keyframes shineSwipe {
+      0% { transform: translateX(-120%) skewX(-20deg); }
+      100% { transform: translateX(220%) skewX(-20deg); }
+    }
+    @keyframes rocketPulse {
+      0%, 100% {
+        transform: translateY(0) rotate(0deg);
+        box-shadow: 0 4px 18px rgba(99, 102, 241, 0.45), 0 0 25px rgba(139, 92, 246, 0.3);
+      }
+      50% {
+        transform: translateY(-2px) rotate(-1deg);
+        box-shadow: 0 8px 24px rgba(99, 102, 241, 0.65), 0 0 35px rgba(236, 72, 153, 0.45);
+      }
+    }
+    @keyframes iconSway {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      50% { transform: translate(2px, -2px) rotate(8deg); }
+    }
+    @keyframes sendBurst {
+      0% { transform: scale(1); }
+      40% { transform: scale(0.92); }
+      75% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .chat-send-btn {
+      position: relative;
+      overflow: hidden;
+      animation: rocketPulse 3.5s infinite ease-in-out;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+    }
+    .chat-send-btn::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      bottom: -50%;
+      left: 0;
+      width: 45px;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.55) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      transform: translateX(-120%) skewX(-20deg);
+      pointer-events: none;
+    }
+    .chat-send-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 10px 28px rgba(99, 102, 241, 0.6), 0 0 40px rgba(139, 92, 246, 0.5);
+    }
+    .chat-send-btn:hover::before {
+      animation: shineSwipe 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .chat-send-btn:hover .send-icon {
+      animation: iconSway 0.8s ease-in-out infinite;
+    }
+    .chat-send-btn.burst-active {
+      animation: sendBurst 0.45s ease-out forwards;
+    }
+
+    /* ============================================================== */
+    /* 4. LIVELY RETROSPECTIVE EMOJIS HOVER ANIMATIONS               */
+    /* ============================================================== */
+    /* Drained: droops, deflates and sways lazily */
+    @keyframes drainedAnim {
+      0%, 100% { transform: translateY(2px) scale(0.92, 0.85) rotate(-4deg); }
+      50% { transform: translateY(5px) scale(0.96, 0.78) rotate(5deg); }
+    }
+    /* Okay: happy bounce, slight nod, gentle peaceful pulse */
+    @keyframes okayAnim {
+      0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+      30% { transform: translateY(-7px) scale(1.18, 1.05) rotate(4deg); }
+      60% { transform: translateY(2px) scale(1.05, 0.95) rotate(-3deg); }
+    }
+    /* Stressed: nervous rapid jitter/shivering vibration with flash */
+    @keyframes stressedAnim {
+      0% { transform: translate(0, 0) rotate(0deg) scale(1.1); }
+      15% { transform: translate(-3px, 1px) rotate(-6deg) scale(1.14); }
+      30% { transform: translate(3px, -2px) rotate(5deg) scale(1.08); }
+      45% { transform: translate(-3px, -1px) rotate(-4deg) scale(1.15); }
+      60% { transform: translate(2px, 2px) rotate(6deg) scale(1.1); }
+      75% { transform: translate(-2px, -2px) rotate(-5deg) scale(1.16); }
+      100% { transform: translate(0, 0) rotate(0deg) scale(1.1); }
+    }
+    /* Overwhelmed: dizzy 360-degree rocking spin & exploding head scale pop */
+    @keyframes overwhelmedAnim {
+      0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 2px rgba(244, 63, 94, 0.4)); }
+      35% { transform: scale(1.35) rotate(-18deg); filter: drop-shadow(0 0 12px rgba(244, 63, 94, 0.9)); }
+      70% { transform: scale(1.45) rotate(360deg); filter: drop-shadow(0 0 16px rgba(234, 179, 8, 1)); }
+      85% { transform: scale(1.22) rotate(375deg); }
+      100% { transform: scale(1.35) rotate(360deg); filter: drop-shadow(0 0 10px rgba(244, 63, 94, 0.7)); }
+    }
+
+    .mood-btn[data-mood="Drained"]:hover .mood-emoji-icon {
+      animation: drainedAnim 1.6s ease-in-out infinite;
+      display: inline-block;
+      transform-origin: bottom center;
+    }
+    .mood-btn[data-mood="Okay"]:hover .mood-emoji-icon {
+      animation: okayAnim 1.1s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+      display: inline-block;
+    }
+    .mood-btn[data-mood="Stressed"]:hover .mood-emoji-icon {
+      animation: stressedAnim 0.35s linear infinite;
+      display: inline-block;
+      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.7));
+    }
+    .mood-btn[data-mood="Overwhelmed"]:hover .mood-emoji-icon {
+      animation: overwhelmedAnim 1.25s cubic-bezier(0.18, 0.89, 0.32, 1.28) infinite;
+      display: inline-block;
+      transform-origin: center center;
+    }
+
+    /* Checkmark Draw Animation */
+    .checkmark-circle {
+      stroke-dasharray: 166;
+      stroke-dashoffset: 166;
+      stroke-width: 3;
+      stroke-miterlimit: 10;
+      stroke: #10b981;
+      fill: none;
+      animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    }
+    .checkmark-check {
+      transform-origin: 50% 50%;
+      stroke-dasharray: 48;
+      stroke-dashoffset: 48;
+      animation: stroke 0.4s cubic-bezier(0.65, 0, 0.45, 1) 0.5s forwards;
+    }
+    @keyframes stroke { 100% { stroke-dashoffset: 0; } }
+
+    /* Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+<style>
+  [data-task-id]:focus-within .sm\:opacity-0{opacity:1}
+  .duration-text{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+  #toastBox{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .toast{pointer-events:auto;padding:10px 16px;border-radius:12px;font-size:13px;color:#fff;background:#1e293b;border:1px solid rgba(255,255,255,.15);box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:90vw}
+  .toast.err{background:#7f1d1d;border-color:#f87171}
+  .toast.ok{background:#064e3b;border-color:#34d399}
+</style>
+</head>
+<body class="bg-mesh text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden">
+  <!-- TOP BAR -->
+  <header class="glass-panel sticky top-0 z-40 border-b px-4 lg:px-6 py-3 transition-colors duration-300">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/25 ring-1 ring-white/20">
+            <i class="w-6 h-6 text-white animate-bounce-subtle" data-lucide="compass"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">CampusPilot</span>
+              <span class="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">AI Agent</span>
+            </div>
+            <p class="text-xs text-slate-400 font-medium hidden sm:block">Intelligent Student Academic Co-pilot</p>
+          </div>
+        </div>
+        <div class="h-6 w-px bg-white/10 hidden md:block"></div>
+        <div class="hidden lg:flex items-center gap-2 text-xs font-medium text-slate-300 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+          <i class="w-3.5 h-3.5 text-blue-400" data-lucide="calendar"></i>
+          <span id="dateLabel">Today</span>
+        </div>
+        <div class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-xs font-medium text-emerald-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span id="syncBadge">Local demo</span>
+        </div>
+      </div>
+      <!-- Controls -->
+      <div class="flex items-center gap-3">
+        <button class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 transition-transform hover:scale-[1.02]" id="openNewPlanBtn">
+          <i class="w-3.5 h-3.5" data-lucide="sparkles"></i>
+          <span>New Plan</span>
+        </button>
+        <button class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300" id="themeToggleBtn" title="Toggle theme">
+          <i class="w-4 h-4 text-amber-300" data-lucide="sun" id="themeIcon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP WRAPPER -->
+  <div class="max-w-7xl mx-auto w-full flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-6">
+    <!-- LEFT SIDEBAR -->
+    <aside class="w-full lg:w-72 shrink-0 flex flex-col gap-5 glass-panel rounded-2xl p-5 border shadow-xl hidden lg:flex">
+      <div class="flex items-center gap-3.5 pb-4 border-b border-white/10">
+        <div class="relative">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-base shadow-md ring-2 ring-white/10">
+            <span id="profileInitials">AV</span>
+          </div>
+          <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#0b0f19]"></span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h2 class="text-sm font-bold text-white truncate" id="profileName">Aditya Verma</h2>
+          <p class="text-xs text-slate-400 truncate" id="profileSubtitle">CampusPilot demo student</p>
+          <span class="inline-block text-[10px] text-indigo-300 bg-indigo-500/15 px-1.5 py-0.5 rounded mt-1" id="profileMeta">Local demo • SQLite</span>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+          <span>Planning Horizon</span>
+          <i class="w-3.5 h-3.5 text-slate-500" data-lucide="calendar-range"></i>
+        </label>
+        <div class="grid grid-cols-3 gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs text-center font-medium">
+          <button class="py-1.5 rounded-lg bg-indigo-600 text-white font-semibold shadow-sm">Today</button>
+          <button class="py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors">48 Hours</button>
+          <button class="py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors">Full Week</button>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Study Preferences</span>
+          <span class="text-[11px] text-blue-400 hover:underline cursor-pointer">Edit</span>
+        </div>
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Daily Study Target</span>
+            <span class="font-bold text-indigo-400" id="studyHoursVal">4.5 hrs</span>
+          </div>
+          <input class="w-full accent-indigo-500 cursor-pointer h-1.5 bg-white/10 rounded-lg" id="studyHoursRange" max="8" min="2" step="0.5" type="range" value="4.5"/>
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span>2h (Light)</span>
+            <span>8h (Intense)</span>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Pomodoro Break</span>
+            <span class="font-bold text-purple-400" id="breakLengthVal">15 min</span>
+          </div>
+          <input class="w-full accent-purple-500 cursor-pointer h-1.5 bg-white/10 rounded-lg" id="breakLengthRange" max="30" min="5" step="5" type="range" value="15"/>
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span>5 min</span>
+            <span>30 min</span>
+          </div>
+        </div>
+      </div>
+      <div class="pt-4 border-t border-white/10 space-y-3">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">Agent Sensors</span>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+              <i class="w-4 h-4" data-lucide="mic"></i>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-slate-200">Voice Mode</div>
+              <div class="text-[10px] text-slate-400">Speech queries &amp; alerts</div>
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input checked="" class="sr-only peer" id="voiceToggle" type="checkbox"/>
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-slate-500/20 text-slate-400 flex items-center justify-center">
+              <i class="w-4 h-4" data-lucide="video-off"></i>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-slate-200">Camera Feed</div>
+              <div class="text-[10px] text-slate-400">Off (Privacy-locked)</div>
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input class="sr-only peer" id="cameraToggle" type="checkbox"/>
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+          </label>
+        </div>
+      </div>
+      <div class="mt-auto pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          <span>Storage: local SQLite</span>
+        </div>
+        <span class="font-mono text-[10px]">Offline-ready</span>
+      </div>
+    </aside>
+
+    <!-- MAIN INTERFACE -->
+    <main class="flex-1 flex flex-col min-w-0 gap-6">
+      <!-- Navigation Tabs -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+        <nav aria-label="Main section navigation" class="flex items-center gap-2 flex-wrap" id="mainTabNav">
+          <button class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md transition-all" data-tab="dashboard">
+            <i class="w-4 h-4" data-lucide="layout-dashboard"></i>
+            <span>Task Dashboard</span>
+            <span class="px-1.5 py-0.5 rounded-full bg-blue-500/30 text-white text-[10px] font-bold" id="badgeTasksCount">4</span>
+          </button>
+          <button class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-slate-400 hover:text-white hover:bg-white/5 transition-all" data-tab="chat">
+            <i class="w-4 h-4" data-lucide="bot"></i>
+            <span>AI Chat &amp; Co-Pilot</span>
+          </button>
+          <button class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-slate-400 hover:text-white hover:bg-white/5 transition-all" data-tab="timeline">
+            <i class="w-4 h-4" data-lucide="git-branch"></i>
+            <span>Day Timeline</span>
+            <span class="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px]" id="conflictBadge">0 conflicts</span>
+          </button>
+          <button class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-slate-400 hover:text-white hover:bg-white/5 transition-all" data-tab="all">
+            <i class="w-4 h-4" data-lucide="columns-3"></i>
+            <span>All-in-One View</span>
+          </button>
+        </nav>
+        <span class="text-xs text-slate-400 hidden sm:inline">Model: <strong class="text-indigo-400" id="modelLabel">checking…</strong></span>
+      </div>
+
+      <!-- SECTIONS CONTAINER -->
+      <div class="flex flex-col gap-6" id="sectionsContainer">
+        <!-- 1. TASK DASHBOARD SECTION -->
+        <section class="section-pane flex flex-col gap-6" id="section-dashboard">
+          <!-- Summary Banner -->
+          <div class="glass-panel rounded-2xl p-6 border shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative overflow-hidden">
+            <div>
+              <div class="flex items-center gap-2.5 mb-1.5 flex-wrap">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                  <i class="w-5 h-5 text-indigo-400" data-lucide="calendar-check-2"></i>
+                  Today's Academic Flight Plan
+                </h3>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30" id="targetLabel">Target: 4.5h Study</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Dynamically Calibrated</span>
+              </div>
+              <p class="text-xs text-slate-400 max-w-xl" id="dashboardSummary">Loading your real schedule from SQLite…</p>
+            </div>
+            <div class="flex items-center gap-5 shrink-0 bg-white/5 p-3 rounded-2xl border border-white/5">
+              <div class="text-right">
+                <div class="text-xs text-slate-400 font-medium">Completion Meter</div>
+                <div class="text-base font-bold text-emerald-400"><span id="completedTasksCount">0</span> of <span id="totalTasksCount">0</span> Tasks <span class="text-xs text-slate-400 font-normal" id="totalHoursLabel">(loading)</span></div>
+              </div>
+              <div class="w-28 bg-white/10 h-3 rounded-full overflow-hidden p-0.5">
+                <div class="bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-500" id="planProgressBar" style="width: 25%"></div>
+              </div>
+              <button class="px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30 flex items-center gap-1.5 transition-colors" id="triggerDiffModalBtn">
+                <i class="w-3.5 h-3.5" data-lucide="git-commit"></i>
+                <span>Review Diff</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Two Column Grid: Task Cards & Upcoming Deadlines -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left 2 Cols: Rope Suspended Task Cards -->
+            <div class="lg:col-span-2 space-y-4">
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <i class="w-4 h-4 text-indigo-400" data-lucide="check-square"></i>
+                  Active Tasks &amp; Focus Sprints
+                </h4>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                  <span class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    <i class="w-3 h-3 text-amber-400" data-lucide="anchor"></i> Physics Rope Rigging
+                  </span>
+                  <span class="hidden sm:inline">Hover to sway • Staggered fall-down</span>
+                </div>
+              </div>
+
+              <!-- Overhead Structural Beam -->
+              <div class="relative pt-2">
+                <div class="rope-rig-beam flex items-center justify-between px-8">
+                  <div class="flex items-center gap-1 text-[9px] uppercase font-mono tracking-widest text-slate-400 opacity-60">
+                    RIG-BEAM // L-402 TENSION ANCHOR
+                  </div>
+                  <div class="flex items-center gap-6">
+                    <span class="w-2 h-2 rounded-full bg-amber-400/80 shadow-[0_0_8px_#f59e0b]"></span>
+                    <span class="w-2 h-2 rounded-full bg-indigo-400/80 shadow-[0_0_8px_#818cf8]"></span>
+                    <span class="w-2 h-2 rounded-full bg-emerald-400/80 shadow-[0_0_8px_#34d399]"></span>
+                  </div>
+                </div>
+
+                <!-- Rope Task List Container -->
+                <div class="space-y-6 pt-1" id="taskListContainer">
+                  <!-- Task 1: DBMS Lab Submission (Priority 1) -->
+                  <div class="rope-card-wrapper animate-rope-drop-p1" data-priority="1">
+                    <div class="rope-line left"></div>
+                    <div class="rope-line right"></div>
+                    <div class="glass-card p-4 rounded-xl flex items-start gap-3.5 group relative border-l-4 border-l-rose-500" data-task-id="1">
+                      <div class="pt-0.5">
+                        <input class="task-checkbox w-5 h-5 rounded-lg border-white/20 bg-white/5 text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-500" type="checkbox"/>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <div class="flex items-center gap-2">
+                            <h5 class="task-title text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">DBMS Lab Submission</h5>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">High Priority</span>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/20 text-blue-300">In Progress</span>
+                          </div>
+                          <span class="font-mono text-xs font-bold text-rose-400 flex items-center gap-1">
+                            <i class="w-3 h-3" data-lucide="flame"></i> 18h left
+                          </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Complete ER Diagram documentation &amp; upload SQL dump script.</p>
+                        <div class="mt-2.5 space-y-1">
+                          <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full" style="width: 72%"></div>
+                          </div>
+                          <div class="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>72% time elapsed</span>
+                            <span>Assigned 6d ago</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-3 text-xs text-slate-300 flex-wrap">
+                          <span class="flex items-center gap-1 text-rose-400 font-semibold">
+                            <i class="w-3.5 h-3.5" data-lucide="alert-circle"></i>
+                            Due Tomorrow, 11:00 AM
+                          </span>
+                          <span class="flex items-center gap-1 text-slate-400">
+                            <i class="w-3.5 h-3.5 text-slate-500" data-lucide="clock"></i>
+                            Est. Duration: <strong class="text-slate-200 duration-text">90 min</strong>
+                          </span>
+                          <span class="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">Slot: 6:30 PM Today</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="action-complete p-2 rounded-lg hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="Mark Done">
+                          <i class="w-4 h-4" data-lucide="check"></i>
+                        </button>
+                        <button class="action-postpone p-2 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400" title="Postpone (+2 hrs)">
+                          <i class="w-4 h-4" data-lucide="corner-down-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Task 2: Quiz Prep (Networks) (Priority 1) -->
+                  <div class="rope-card-wrapper animate-rope-drop-p2" data-priority="1">
+                    <div class="rope-line left"></div>
+                    <div class="rope-line right"></div>
+                    <div class="glass-card p-4 rounded-xl flex items-start gap-3.5 group relative border-l-4 border-l-rose-500" data-task-id="2">
+                      <div class="pt-0.5">
+                        <input class="task-checkbox w-5 h-5 rounded-lg border-white/20 bg-white/5 text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-500" type="checkbox"/>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <div class="flex items-center gap-2">
+                            <h5 class="task-title text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">Quiz Prep (Computer Networks)</h5>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">High Priority</span>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-purple-500/20 text-purple-300">Scheduled</span>
+                          </div>
+                          <span class="font-mono text-xs text-slate-300">2d 4h left</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Review Sliding Window Protocols, TCP/UDP Headers, and subnetting practice.</p>
+                        <div class="mt-2.5 space-y-1">
+                          <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full" style="width: 50%"></div>
+                          </div>
+                          <div class="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>50% countdown window</span>
+                            <span>Due Friday 2:00 PM</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-3 text-xs text-slate-300 flex-wrap">
+                          <span class="flex items-center gap-1 text-slate-300 font-medium">
+                            <i class="w-3.5 h-3.5 text-blue-400" data-lucide="calendar"></i>
+                            Due Friday
+                          </span>
+                          <span class="flex items-center gap-1 text-slate-400">
+                            <i class="w-3.5 h-3.5 text-slate-500" data-lucide="clock"></i>
+                            Est. Duration: <strong class="text-slate-200 duration-text">120 min</strong>
+                          </span>
+                          <span class="text-[11px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">Planned: Friday 2:00 PM</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="action-complete p-2 rounded-lg hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="Mark Done">
+                          <i class="w-4 h-4" data-lucide="check"></i>
+                        </button>
+                        <button class="action-postpone p-2 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400" title="Postpone (+1 Day)">
+                          <i class="w-4 h-4" data-lucide="corner-down-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Task 3: Java Practice Set (Priority 2) -->
+                  <div class="rope-card-wrapper animate-rope-drop-p3" data-priority="2">
+                    <div class="rope-line left"></div>
+                    <div class="rope-line right"></div>
+                    <div class="glass-card p-4 rounded-xl flex items-start gap-3.5 group relative border-l-4 border-l-amber-500" data-task-id="3">
+                      <div class="pt-0.5">
+                        <input class="task-checkbox w-5 h-5 rounded-lg border-white/20 bg-white/5 text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-500" type="checkbox"/>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <div class="flex items-center gap-2">
+                            <h5 class="task-title text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">Java Practice Set</h5>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">Medium Priority</span>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-300">Pending</span>
+                          </div>
+                          <span class="font-mono text-xs text-slate-400">4 days remaining</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Implement Multithreading synchronization &amp; producer-consumer problem.</p>
+                        <div class="mt-2.5 space-y-1">
+                          <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                            <div class="bg-gradient-to-r from-indigo-500 to-blue-500 h-full rounded-full" style="width: 30%"></div>
+                          </div>
+                          <div class="flex items-center justify-between text-[10px] text-slate-400">
+                            <span>30% elapsed</span>
+                            <span>Due Sunday 11:59 PM</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-3 text-xs text-slate-300 flex-wrap">
+                          <span class="flex items-center gap-1 text-slate-300">
+                            <i class="w-3.5 h-3.5 text-blue-400" data-lucide="calendar"></i>
+                            Due Sunday
+                          </span>
+                          <span class="flex items-center gap-1 text-slate-400">
+                            <i class="w-3.5 h-3.5 text-slate-500" data-lucide="clock"></i>
+                            Est. Duration: <strong class="text-slate-200 duration-text">60 min</strong>
+                          </span>
+                          <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Flexible</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="action-complete p-2 rounded-lg hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="Mark Done">
+                          <i class="w-4 h-4" data-lucide="check"></i>
+                        </button>
+                        <button class="action-postpone p-2 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400" title="Postpone (+1 Day)">
+                          <i class="w-4 h-4" data-lucide="corner-down-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Task 4: Read 2 College Notices (Priority 3) -->
+                  <div class="rope-card-wrapper animate-rope-drop-p4" data-priority="3">
+                    <div class="rope-line left"></div>
+                    <div class="rope-line right"></div>
+                    <div class="glass-card p-4 rounded-xl flex items-start gap-3.5 group relative opacity-75 border-l-4 border-l-emerald-500" data-task-id="4">
+                      <div class="pt-0.5">
+                        <input checked="" class="task-checkbox w-5 h-5 rounded-lg border-white/20 bg-white/5 text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-500" type="checkbox"/>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <div class="flex items-center gap-2">
+                            <h5 class="task-title text-sm font-bold line-through text-slate-400 group-hover:text-slate-300 transition-colors">Read 2 College Notices</h5>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Low Priority</span>
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-400">To Do</span>
+                          </div>
+                          <span class="font-mono text-xs text-emerald-400">Completed ✓</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1 line-through">Mid-term exam seating chart and library holiday schedule.</p>
+                        <div class="flex items-center gap-4 mt-3 text-xs text-slate-400 flex-wrap">
+                          <span class="text-emerald-400 font-medium">✓ Completed at 2:15 PM</span>
+                          <span class="flex items-center gap-1 text-slate-500">
+                            <i class="w-3.5 h-3.5" data-lucide="clock"></i>
+                            Duration: <strong class="duration-text">20 min</strong>
+                          </span>
+                          <span class="text-[11px] px-2 py-0.5 rounded bg-white/5 text-slate-300">Today 8:00 PM</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="action-complete p-2 rounded-lg hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="Undo Complete">
+                          <i class="w-4 h-4" data-lucide="rotate-ccw"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Col: Upcoming Deadlines -->
+            <div class="space-y-4">
+              <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <i class="w-4 h-4 text-purple-400" data-lucide="hourglass"></i>
+                Upcoming Deadlines Countdown
+              </h4>
+              <div class="glass-panel rounded-2xl p-5 border space-y-5" id="deadlineList">
+                <div id="deadlineItems" class="space-y-5">
+                <div class="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-rose-500/30 transition-colors">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-rose-300 flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                      DBMS Lab Submission
+                    </span>
+                    <span class="font-mono text-rose-400 font-bold">18h remaining</span>
+                  </div>
+                  <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full" style="width: 82%"></div>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span>Assigned 6d ago</span>
+                    <span class="text-rose-300 font-semibold">Due 11:00 AM Tomorrow</span>
+                  </div>
+                </div>
+                <div class="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-purple-500/30 transition-colors">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-purple-300">Networks Quiz</span>
+                    <span class="font-mono text-slate-300">2 days 4 hrs</span>
+                  </div>
+                  <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full" style="width: 55%"></div>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span>Revision: 60%</span>
+                    <span>Due Friday 2:00 PM</span>
+                  </div>
+                </div>
+                <div class="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-indigo-500/30 transition-colors">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-semibold text-slate-300">Java Practice Set</span>
+                    <span class="font-mono text-slate-400">4 days remaining</span>
+                  </div>
+                  <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                    <div class="bg-gradient-to-r from-indigo-500 to-blue-500 h-full rounded-full" style="width: 30%"></div>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span>Batch #3 Multithreading</span>
+                    <span>Due Sunday 11:59 PM</span>
+                  </div>
+                </div>
+                </div>
+                <div class="p-3.5 rounded-xl bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/20 text-xs">
+                  <div class="font-bold text-white mb-1 flex items-center gap-1.5">
+                    <i class="w-4 h-4 text-purple-400" data-lucide="sparkles"></i>
+                    Check-in ready
+                  </div>
+                  <p class="text-slate-400 text-[11px] mb-2.5">Log how your last study block went. The entry stays in your local database.</p>
+                  <button class="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs text-center block transition-colors" id="jumpToCheckInBtn">
+                    Open check-in
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. AI CHAT SECTION -->
+        <section class="section-pane flex flex-col glass-panel rounded-2xl border shadow-xl overflow-hidden min-h-[580px] hidden" id="section-chat">
+          <div class="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                <i class="w-4 h-4" data-lucide="sparkles"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  CampusPilot Agent
+                  <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                </h3>
+                <p class="text-[11px] text-slate-400">Autonomous calendar conflict resolver &amp; schedule optimizer</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <select class="bg-white/5 border border-white/10 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none cursor-pointer" id="languageSelect">
+                <option class="bg-slate-900 text-slate-200" value="en">English (US)</option>
+                <option class="bg-slate-900 text-slate-200" value="te">Telugu (తెలుగు)</option>
+                <option class="bg-slate-900 text-slate-200" value="hi">Hindi (हिन्दी)</option>
+              </select>
+              <button class="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white" id="speakerBtn" title="Toggle agent voice">
+                <i class="w-4 h-4" data-lucide="volume-2" id="speakerIcon"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Chat Message Log -->
+          <div class="flex-1 p-4 lg:p-6 overflow-y-auto space-y-4 max-h-[460px]" id="chatMessageLog">
+            <div class="flex items-start gap-3 animate-fade-up">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
+                <i class="w-4 h-4" data-lucide="bot"></i>
+              </div>
+              <div class="space-y-2 max-w-2xl">
+                <div class="glass-card p-4 rounded-2xl rounded-tl-sm text-sm text-slate-200 leading-relaxed shadow-sm">
+                  Hey Aditya! I've scanned your syllabi, upcoming portals, and timetable. Your <strong>DBMS Lab submission</strong> is due tomorrow at 11:00 AM, and your afternoon had an overlap with Badminton practice.
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                  <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/15 border border-blue-500/25 text-[11px] font-medium text-blue-300">
+                    <i class="w-3 h-3 text-blue-400" data-lucide="check-circle"></i>
+                    <span>Checked deadlines</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/35 text-[11px] font-medium text-amber-300">
+                    <i class="w-3 h-3 text-amber-400" data-lucide="alert-triangle"></i>
+                    <span>Found 1 conflict</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-[11px] font-medium text-emerald-300">
+                    <i class="w-3 h-3 text-emerald-400" data-lucide="sparkle"></i>
+                    <span>Created optimized plan</span>
+                  </div>
+                </div>
+                <details class="group bg-white/5 rounded-xl border border-white/5 overflow-hidden text-xs transition-all">
+                  <summary class="p-2.5 cursor-pointer flex items-center justify-between text-slate-400 hover:text-slate-200 select-none">
+                    <span class="flex items-center gap-2 font-mono">
+                      <i class="w-3.5 h-3.5 text-indigo-400" data-lucide="cpu"></i>
+                      Agent Reasoning &amp; Tool Calls Trace (3 steps)
+                    </span>
+                    <i class="w-3.5 h-3.5 group-open:rotate-180 transition-transform" data-lucide="chevron-down"></i>
+                  </summary>
+                  <div class="p-3 bg-black/30 border-t border-white/5 font-mono text-[11px] text-slate-300 space-y-2">
+                    <div class="text-blue-300">1. query_canvas_lms(filter="due_soon") → Found: DBMS Lab due tomorrow 11:00 AM.</div>
+                    <div class="text-amber-300">2. detect_conflicts(calendar="student_gcal") → 4:00 PM DBMS review overlaps with Dept Seminar.</div>
+                    <div class="text-emerald-300">3. generate_schedule_blocks() → Reallocated 90 min deep study to 6:30 PM tonight.</div>
+                  </div>
+                </details>
+              </div>
+            </div>
+            <div class="flex items-start justify-end gap-3 animate-fade-up">
+              <div class="glass-card bg-indigo-600/30 border-indigo-500/30 p-3.5 rounded-2xl rounded-tr-sm text-sm text-slate-100 max-w-md shadow-sm">
+                Can you carve out 90 minutes for the DBMS Lab today so I don't pull an all-nighter?
+              </div>
+              <div class="w-8 h-8 rounded-xl bg-slate-700 flex items-center justify-center text-slate-200 shrink-0 font-bold text-xs">AV</div>
+            </div>
+            <div class="flex items-start gap-3 animate-fade-up">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
+                <i class="w-4 h-4" data-lucide="bot"></i>
+              </div>
+              <div class="space-y-2 max-w-2xl">
+                <div class="glass-card p-4 rounded-2xl rounded-tl-sm text-sm text-slate-200 leading-relaxed">
+                  Done! I slotted your <strong>DBMS Lab submission sprint</strong> between <strong>6:30 PM – 8:00 PM</strong> tonight right after your break. I've sent a preview to the timeline and your task board.
+                </div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 hidden" id="agentThinkingBox">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md animate-pulse">
+                <i class="w-4 h-4 animate-spin" data-lucide="loader"></i>
+              </div>
+              <div class="glass-card p-4 rounded-2xl rounded-tl-sm text-xs text-slate-300 w-72 relative overflow-hidden">
+                <div class="absolute inset-0 pixel-grid-dots opacity-40"></div>
+                <div class="relative z-10 flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+                  <span class="font-mono text-purple-300">Synthesizing constraints &amp; schedule...</span>
+                </div>
+                <div class="w-full bg-white/10 h-1 rounded-full mt-3 overflow-hidden relative">
+                  <div class="absolute inset-0 bg-gradient-to-r from-transparent via-purple-400 to-transparent w-full animate-shimmer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Quick Suggestions -->
+          <div class="px-4 py-2 border-t border-white/5 flex items-center gap-2 overflow-x-auto bg-black/10">
+            <span class="text-[11px] font-semibold text-slate-400 shrink-0">Suggestions:</span>
+            <button class="quick-prompt-btn px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition-colors whitespace-nowrap">
+              📅 Plan my next two days
+            </button>
+            <button class="quick-prompt-btn px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition-colors whitespace-nowrap">
+              ⏳ I lost two hours today, rebalance
+            </button>
+            <button class="quick-prompt-btn px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition-colors whitespace-nowrap">
+              ☕ Add a 15-min coffee break
+            </button>
+          </div>
+          <!-- Chat Input Bar with Feature 3 Animated Send Button -->
+          <div class="p-4 border-t border-white/10 bg-white/[0.02]">
+            <form class="flex items-center gap-2" id="chatForm">
+              <button aria-label="Toggle voice input" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all relative" id="micBtn" title="Hold or click to voice speak" type="button">
+                <i class="w-4 h-4" data-lucide="mic" id="micIcon"></i>
+              </button>
+              <div class="relative flex-1">
+                <input class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all" id="chatInput" placeholder="Ask CampusPilot anything (e.g. 'Reschedule Java practice to Sunday morning')..." type="text"/>
+              </div>
+              <!-- Animated Send Button -->
+              <button class="chat-send-btn px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-semibold text-sm shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-all cursor-pointer" id="chatSubmitBtn" type="submit">
+                <span class="tracking-wide">Send</span>
+                <i class="w-4 h-4 send-icon transition-transform duration-300" data-lucide="send"></i>
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- 3. TIMELINE SECTION (Feature 2: Organic "Time Branch" Path) -->
+        <section class="section-pane flex flex-col glass-panel rounded-2xl border shadow-xl p-5 lg:p-7 hidden" id="section-timeline">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                  <i class="w-4 h-4" data-lucide="git-branch"></i>
+                </span>
+                <h3 class="text-base font-bold text-white">Chronological Day Path: "Time Branch" Flow</h3>
+                <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Dynamic Sprouting</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Central time-stem (08:00 - 22:00) branching organically into lectures, focus sprints, resolved conflicts, and AI proposals</p>
+            </div>
+            <!-- Legend -->
+            <div class="flex items-center gap-3 text-[11px] flex-wrap">
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span> Classes</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_8px_#8b5cf6]"></span> Study Sprints</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span> Breaks</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span> Conflicts</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-300 ring-2 ring-amber-400/50"></span> AI Proposed</span>
+            </div>
+          </div>
+
+          <!-- Time Branch Canvas Wrapper -->
+          <div class="relative py-8 min-h-[720px]">
+            <!-- Central Vertical Glowing Trunk Line -->
+            <div class="branch-trunk-line"></div>
+
+            <!-- Branch Nodes -->
+            <div class="space-y-12 relative z-10" id="timelineBranchContainer">
+              <!-- Node 1: 09:00 AM (Left Branch - Blue Lecture) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-2 md:order-1">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-r-4 md:border-r-4 md:border-l-0 border-l-4 border-blue-500 ml-12 md:ml-0 transition-all duration-300">
+                    <div class="flex items-center md:justify-end gap-2 mb-1">
+                      <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">Class Lecture</span>
+                      <span class="text-xs font-bold text-white">Algorithms &amp; Complexity</span>
+                    </div>
+                    <p class="text-xs text-slate-300">Hall B3 • Prof. S. Ramanujan • Asymptotic analysis &amp; Recurrences</p>
+                    <div class="flex items-center md:justify-end gap-3 mt-2 text-[11px] text-slate-400">
+                      <span>Room B3</span>
+                      <span>•</span>
+                      <span class="text-blue-300 font-medium">9:00 AM – 10:45 AM</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-[#0b0f19] shadow-lg shadow-blue-500/50">
+                    <i class="w-4 h-4" data-lucide="book-open"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-3 pl-12 md:pl-0 flex items-center gap-3">
+                  <div class="hidden md:flex items-center gap-2 text-blue-300 font-mono text-xs font-bold bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded-full">
+                    <i class="w-3.5 h-3.5" data-lucide="clock"></i>
+                    <span>09:00 AM</span>
+                  </div>
+                  <span class="text-xs text-slate-500 hidden md:inline">Computer Science Core</span>
+                </div>
+              </div>
+
+              <!-- Node 2: 11:30 AM (Right Branch - Green Break) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-3 md:order-1 flex md:justify-end items-center gap-3 pl-12 md:pl-0">
+                  <span class="text-xs text-slate-500 hidden md:inline">Rest &amp; Nutrition</span>
+                  <div class="hidden md:flex items-center gap-2 text-emerald-300 font-mono text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                    <i class="w-3.5 h-3.5" data-lucide="coffee"></i>
+                    <span>11:30 AM</span>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-[#0b0f19] shadow-lg shadow-emerald-500/50">
+                    <i class="w-4 h-4" data-lucide="sun"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-2 md:order-3">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-l-4 border-emerald-500 ml-12 md:ml-0 transition-all duration-300">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-xs font-bold text-emerald-300">Campus Lunch &amp; Fresh Air Walk</span>
+                      <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">Break (45m)</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Student Quad green space with batchmates before DBMS lab session.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Node 3: 02:00 PM (Left Branch - Blue Completed Lab) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-2 md:order-1">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-r-4 md:border-r-4 md:border-l-0 border-l-4 border-blue-500 ml-12 md:ml-0 opacity-85 transition-all duration-300">
+                    <div class="flex items-center md:justify-end gap-2 mb-1">
+                      <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">Ended 4:00 PM</span>
+                      <span class="text-xs font-bold text-white">DBMS Practical Lab</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Terminal #42 • Executed SQL transactions &amp; schema indexing</p>
+                    <div class="flex items-center md:justify-end gap-2 mt-2 text-[11px] text-emerald-400 font-medium">
+                      <i class="w-3.5 h-3.5" data-lucide="check-circle-2"></i>
+                      <span>Attended (Reflection check-in unlocked below)</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-9 h-9 rounded-full bg-blue-600/80 text-white flex items-center justify-center font-bold text-xs ring-4 ring-[#0b0f19]">
+                    <i class="w-4 h-4" data-lucide="terminal"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-3 pl-12 md:pl-0 flex items-center gap-3">
+                  <div class="hidden md:flex items-center gap-2 text-slate-400 font-mono text-xs font-bold bg-white/5 border border-white/10 px-3 py-1 rounded-full">
+                    <span>02:00 PM</span>
+                  </div>
+                  <span class="text-xs text-slate-500 hidden md:inline">2h Hands-on session</span>
+                </div>
+              </div>
+
+              <!-- Node 4: 04:00 PM (Right Branch - Amber Conflict Resolved) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-3 md:order-1 flex md:justify-end items-center gap-3 pl-12 md:pl-0">
+                  <span class="text-xs text-amber-300 font-bold hidden md:inline">Conflict Auto-Resolved</span>
+                  <div class="hidden md:flex items-center gap-2 text-rose-300 font-mono text-xs font-bold bg-rose-500/20 border border-rose-500/30 px-3 py-1 rounded-full">
+                    <i class="w-3.5 h-3.5 text-rose-400" data-lucide="alert-triangle"></i>
+                    <span>04:00 PM</span>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-9 h-9 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold text-xs ring-4 ring-[#0b0f19] shadow-lg shadow-amber-500/70 animate-pulse">
+                    <i class="w-4 h-4" data-lucide="git-commit"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-2 md:order-3">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-l-4 border-amber-400 bg-amber-500/10 border border-amber-500/30 ml-12 md:ml-0 transition-all duration-300">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <i class="w-3.5 h-3.5 text-amber-400" data-lucide="alert-circle"></i>
+                        Dept Seminar vs Badminton Practice
+                      </span>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200">Shifted</span>
+                    </div>
+                    <p class="text-xs text-slate-300 mt-1">Both were booked at 4:30 PM. CampusPilot shifted physical activity to 7:00 PM without infringing study targets.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Node 5: 06:30 PM (Left Branch - Proposed Agent Slot) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-2 md:order-1">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-2 border-dashed border-amber-400 bg-amber-500/15 animate-pulse-glow ml-12 md:ml-0 transition-all duration-300">
+                    <div class="flex items-center md:justify-end gap-2 mb-1">
+                      <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 flex items-center gap-1">
+                        <i class="w-3 h-3" data-lucide="sparkles"></i> AI Proposed Slot
+                      </span>
+                      <span class="text-xs font-bold text-white">DBMS Lab Final Sprint</span>
+                    </div>
+                    <p class="text-xs text-amber-200 mt-1">90 min deep study allocated directly prior to tomorrow's 11:00 AM deadline.</p>
+                    <div class="flex items-center md:justify-end gap-2 mt-3">
+                      <button class="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1">
+                        <i class="w-3.5 h-3.5" data-lucide="check"></i> Accept Slot
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-10 h-10 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center font-bold text-sm ring-4 ring-[#0b0f19] shadow-xl shadow-amber-400/80">
+                    <i class="w-5 h-5" data-lucide="zap"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-3 pl-12 md:pl-0 flex items-center gap-3">
+                  <div class="hidden md:flex items-center gap-2 text-amber-300 font-mono text-xs font-bold bg-amber-500/20 border border-amber-500/30 px-3 py-1 rounded-full">
+                    <i class="w-3.5 h-3.5" data-lucide="sparkles"></i>
+                    <span>06:30 PM</span>
+                  </div>
+                  <span class="text-xs text-amber-200 font-semibold hidden md:inline">90-min High-Efficiency Window</span>
+                </div>
+              </div>
+
+              <!-- Node 6: 09:00 PM (Right Branch - Purple Networks Study) -->
+              <div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">
+                <div class="w-full md:w-[45%] md:text-right order-3 md:order-1 flex md:justify-end items-center gap-3 pl-12 md:pl-0">
+                  <span class="text-xs text-slate-400 hidden md:inline">Friday Quiz Buffer</span>
+                  <div class="hidden md:flex items-center gap-2 text-purple-300 font-mono text-xs font-bold bg-purple-500/15 border border-purple-500/25 px-3 py-1 rounded-full">
+                    <i class="w-3.5 h-3.5" data-lucide="book"></i>
+                    <span>09:00 PM</span>
+                  </div>
+                </div>
+                <div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20">
+                  <div class="branch-central-orb w-9 h-9 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-[#0b0f19] shadow-lg shadow-purple-500/50">
+                    <i class="w-4 h-4" data-lucide="cpu"></i>
+                  </div>
+                </div>
+                <div class="w-full md:w-[45%] order-2 md:order-3">
+                  <div class="branch-card glass-card p-4 rounded-2xl border-l-4 border-purple-500 ml-12 md:ml-0 transition-all duration-300">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-xs font-bold text-purple-300">Networks Revision (Quiz Prep)</span>
+                      <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-semibold">Study (60m)</span>
+                    </div>
+                    <p class="text-xs text-slate-300">Review lecture slides, TCP window handshake, and packet routing protocols.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 4. CHECK-IN SECTION (Feature 4: Lively Custom Animated Emojis) -->
+      <section class="glass-panel rounded-2xl p-5 lg:p-6 border shadow-xl relative overflow-hidden transition-all duration-300" id="checkInSection">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">Academic Retrospective</span>
+              <span class="text-xs text-slate-400 font-mono" id="checkInMeta">Optional check-in</span>
+            </div>
+            <h3 class="text-base font-bold text-white mt-1" id="checkInTitle">How did your last study block go?</h3>
+          </div>
+          <span class="text-xs text-slate-400 hidden sm:inline">Saved only when you press Save; your plan changes only if you ask</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-5">
+          <!-- Segmented Control -->
+          <div class="space-y-2">
+            <label class="text-xs font-semibold text-slate-300 block">Completion Status</label>
+            <div class="grid grid-cols-3 gap-1 bg-white/5 p-1 rounded-xl border border-white/5 text-xs text-center font-medium">
+              <button class="checkin-status-btn py-2 px-1 rounded-lg bg-indigo-600 text-white font-semibold shadow-sm transition-all" data-status="Completed" type="button">Completed</button>
+              <button class="checkin-status-btn py-2 px-1 rounded-lg text-slate-300 hover:text-white transition-all" data-status="Partial" type="button">Partial</button>
+              <button class="checkin-status-btn py-2 px-1 rounded-lg text-slate-300 hover:text-white transition-all" data-status="Needed help" type="button">Needed Help</button>
+            </div>
+          </div>
+          <!-- Emojis with Feature 4 Custom Hover Animations -->
+          <div class="space-y-2">
+            <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <span>How are you feeling right now?</span>
+              <span class="text-[10px] text-indigo-400 font-normal">Hover to preview mood physics</span>
+            </label>
+            <div class="grid grid-cols-4 gap-2">
+              <!-- Drained -->
+              <button class="mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs transition-all cursor-pointer group" data-mood="Drained" title="Drained: droops &amp; deflates lazily" type="button">
+                <span class="mood-emoji-icon text-2xl mb-0.5 transform transition-transform">😫</span>
+                <span class="text-[10px] text-slate-300 group-hover:text-amber-200">Drained</span>
+              </button>
+              <!-- Okay -->
+              <button class="mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-indigo-600/30 border border-indigo-500/50 text-xs transition-all ring-1 ring-indigo-400 cursor-pointer group" data-mood="Okay" title="Okay: happy bounce &amp; gentle nod" type="button">
+                <span class="mood-emoji-icon text-2xl mb-0.5 transform transition-transform">😌</span>
+                <span class="text-[10px] text-indigo-200 font-bold group-hover:text-white">Okay</span>
+              </button>
+              <!-- Stressed -->
+              <button class="mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs transition-all cursor-pointer group" data-mood="Stressed" title="Stressed: shivering nervous vibration" type="button">
+                <span class="mood-emoji-icon text-2xl mb-0.5 transform transition-transform">😰</span>
+                <span class="text-[10px] text-slate-300 group-hover:text-rose-300">Stressed</span>
+              </button>
+              <!-- Overwhelmed -->
+              <button class="mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs transition-all cursor-pointer group" data-mood="Overwhelmed" title="Overwhelmed: dizzy 360-degree spin &amp; pop explosion" type="button">
+                <span class="mood-emoji-icon text-2xl mb-0.5 transform transition-transform">🤯</span>
+                <span class="text-[10px] text-slate-300 group-hover:text-purple-300">Overwhelmed</span>
+              </button>
+            </div>
+          </div>
+          <!-- Preview & Confirmation -->
+          <div class="space-y-2 flex flex-col justify-between">
+            <div class="p-2.5 rounded-xl bg-black/20 border border-white/5 text-xs space-y-1">
+              <span class="text-slate-400 font-mono text-[10px] block">Agent Action Preview:</span>
+              <p class="text-indigo-300 text-[11px]" id="checkInPreviewText">Status: <strong>Completed</strong>. Mood: <strong>Okay</strong>. Retaining planned 6:30 PM slot for doc polish and adding calm buffers.</p>
+            </div>
+            <div class="flex items-center gap-2 pt-1">
+              <button class="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs text-center transition-transform hover:scale-[1.02]" id="saveCheckInBtn">Save Check-In</button>
+              <button class="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs transition-colors" id="dismissCheckInBtn">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- CONFIRMATION / DIFF MODAL -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md hidden transition-opacity duration-300" id="diffModal">
+    <div class="glass-panel w-full max-w-xl rounded-2xl border border-white/15 shadow-2xl p-6 space-y-5 animate-fade-up relative">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+            <i class="w-4 h-4" data-lucide="git-pull-request"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Review Proposed Plan Changes</h3>
+            <p class="text-xs text-slate-400" id="diffModalSubtitle">Waiting for a proposal…</p>
+          </div>
+        </div>
+        <button class="p-1 rounded-lg text-slate-400 hover:text-white" id="closeModalX">
+          <i class="w-4 h-4" data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider" id="diffCountLabel">Plan Delta</div>
+        <div class="space-y-2 text-xs" id="diffList">
+          <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-3">
+            <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0">+</span>
+            <div>
+              <div class="font-bold text-emerald-300">[ADDED] 90-min DBMS Lab Deep Work Block</div>
+              <div class="text-slate-300 text-[11px] mt-0.5">Slotted tonight from 6:30 PM – 8:00 PM before tomorrow's 11:00 AM deadline.</div>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3">
+            <span class="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">↔</span>
+            <div>
+              <div class="font-bold text-amber-300">[MOVED] Badminton Practice shifted by +1.5h</div>
+              <div class="text-slate-300 text-[11px] mt-0.5">Relocated from 4:30 PM to 7:00 PM to eliminate conflict with Dept Seminar.</div>
+            </div>
+          </div>
+          <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-3">
+            <span class="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-xs shrink-0">−</span>
+            <div>
+              <div class="font-bold text-rose-300">[REMOVED] Unstructured late-night gaming block</div>
+              <div class="text-slate-300 text-[11px] mt-0.5">Replaced with scheduled 7.5 hrs sleep target prior to Thursday quiz review.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between pt-3 border-t border-white/10 gap-3">
+        <button class="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold" id="cancelModalBtn">Cancel</button>
+        <button class="px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 text-xs font-semibold" id="modifyPlanBtn">Modify</button>
+        <button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white text-xs font-bold shadow-lg" id="confirmSavePlanBtn">Confirm and Save</button>
+      </div>
+      <!-- Success State -->
+      <div class="absolute inset-0 bg-[#0c1222] rounded-2xl flex flex-col items-center justify-center p-6 hidden z-10" id="modalSuccessState">
+        <svg class="w-20 h-20 mb-3" viewBox="0 0 52 52">
+          <circle class="checkmark-circle" cx="26" cy="26" r="24"></circle>
+          <path class="checkmark-check" d="M14.1 27.2l7.1 7.2 16.7-16.8" fill="none" stroke="#10b981" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+        </svg>
+        <h4 class="text-lg font-bold text-white mb-1">New Plan Activated!</h4>
+        <p class="text-xs text-slate-400 text-center max-w-xs mb-4">Saved to your CampusPilot schedule in SQLite. Nothing external was changed.</p>
+        <button class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md" id="closeSuccessModalBtn">Back to CampusPilot</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    /* INTEGRATION: begin -- shared UI state (Phase 3). */
+    let appState = null;
+    let currentProposal = null;
+    /* INTEGRATION: end */
+
+    // Theme toggle
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeIcon = document.getElementById('themeIcon');
+    let isDark = true;
+    themeToggleBtn.addEventListener('click', () => {
+      isDark = !isDark;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        themeIcon.setAttribute('data-lucide', 'sun');
+        themeIcon.classList.remove('text-indigo-600');
+        themeIcon.classList.add('text-amber-300');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        themeIcon.setAttribute('data-lucide', 'moon');
+        themeIcon.classList.remove('text-amber-300');
+        themeIcon.classList.add('text-indigo-600');
+      }
+      lucide.createIcons();
+    });
+
+    // Tab Switching & Rope physics replay
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const sections = {
+      dashboard: document.getElementById('section-dashboard'),
+      chat: document.getElementById('section-chat'),
+      timeline: document.getElementById('section-timeline'),
+    };
+
+    function triggerRopePhysicsReplay() {
+      const ropeWrappers = document.querySelectorAll('.rope-card-wrapper');
+      ropeWrappers.forEach((el, index) => {
+        el.style.animation = 'none';
+        void el.offsetHeight;
+        const delay = index === 0 ? '0.05s' : index === 1 ? '0.22s' : index === 2 ? '0.40s' : '0.58s';
+        el.style.animation = `ropeDropSettling 0.95s cubic-bezier(0.18, 0.89, 0.32, 1.28) ${delay} backwards`;
+      });
+    }
+
+    function setActiveTab(targetTab) {
+      tabBtns.forEach(b => {
+        if (b.getAttribute('data-tab') === targetTab) {
+          b.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md transition-all';
+        } else {
+          b.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 text-slate-400 hover:text-white hover:bg-white/5 transition-all';
+        }
+      });
+
+      if (targetTab === 'all') {
+        Object.keys(sections).forEach(key => sections[key].classList.remove('hidden'));
+        triggerRopePhysicsReplay();
+      } else {
+        Object.keys(sections).forEach(key => {
+          if (key === targetTab) {
+            sections[key].classList.remove('hidden');
+            if (key === 'dashboard') triggerRopePhysicsReplay();
+          } else {
+            sections[key].classList.add('hidden');
+          }
+        });
+      }
+      lucide.createIcons();
+    }
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => setActiveTab(btn.getAttribute('data-tab')));
+    });
+
+    // Jump to check-in helper
+    document.getElementById('jumpToCheckInBtn').addEventListener('click', () => {
+      document.getElementById('checkInSection').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    // Sliders
+    const studyHoursRange = document.getElementById('studyHoursRange');
+    const studyHoursVal = document.getElementById('studyHoursVal');
+    studyHoursRange.addEventListener('input', (e) => { studyHoursVal.textContent = e.target.value + ' hrs'; });
+
+    const breakLengthRange = document.getElementById('breakLengthRange');
+    const breakLengthVal = document.getElementById('breakLengthVal');
+    breakLengthRange.addEventListener('input', (e) => { breakLengthVal.textContent = e.target.value + ' min'; });
+
+    // =====================================================================
+    // BACKEND CONNECTION  -- teammates edit ONLY this block to connect
+    // Set USE_MOCK = false and set API_BASE to the FastAPI server URL.
+    //
+    // POST /chat          body {message, language}
+    //   -> {reply: "text", tool_calls: [{name, summary, status: "ok"|"warn"}], proposed_plan: null | {...}}
+    // POST /tasks/complete   body {task_id, done}        -> {ok: true}
+    // POST /tasks/postpone   body {task_id}              -> {ok: true}
+    // POST /tasks/duration   body {task_id, minutes}     -> {ok: true}
+    // POST /plan/save        body {plan}                 -> {ok: true}
+    // POST /checkin          body {status, mood}         -> {ok: true}
+    // =====================================================================
+    // INTEGRATION: same-origin hosting; the server serves this page at /.
+    const API_BASE = window.location.origin;
+    const USE_MOCK = false;
+
+    async function callApi(path, body) {
+      const res = await fetch(API_BASE + path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      let payload = {};
+      try { payload = await res.json(); } catch (err) { payload = {}; }
+      if (!res.ok) {
+        throw new Error(payload.error || ('Server error ' + res.status));
+      }
+      return payload;
+    }
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+    async function mockChat(message) {
+      await wait(1200);
+      if (message.toLowerCase().includes('error')) throw new Error('Mock failure');
+      return {
+        reply: 'I\'ve processed: "' + message + '". Your schedule has been updated.',
+        tool_calls: [
+          { name: 'get_upcoming_deadlines', summary: 'Checked deadlines', status: 'ok' },
+          { name: 'detect_conflicts', summary: 'Found 1 conflict', status: 'warn' },
+          { name: 'create_plan', summary: 'Created plan', status: 'ok' }
+        ],
+        proposed_plan: null
+      };
+    }
+
+    const api = {
+      chat: (message, language) => USE_MOCK ? mockChat(message) : callApi('/chat', { message, language }),
+      completeTask: (task_id, done) => USE_MOCK ? wait(300).then(() => ({ ok: true })) : callApi('/tasks/complete', { task_id, done }),
+      postponeTask: (task_id) => USE_MOCK ? wait(300).then(() => ({ ok: true })) : callApi('/tasks/postpone', { task_id }),
+      updateDuration: (task_id, minutes) => USE_MOCK ? wait(300).then(() => ({ ok: true })) : callApi('/tasks/duration', { task_id, minutes }),
+      savePlan: (plan) => USE_MOCK ? wait(600).then(() => ({ ok: true })) : callApi('/plan/save', { plan }),
+      cancelPlan: () => USE_MOCK ? wait(200).then(() => ({ ok: true })) : callApi('/plan/cancel', {}),
+      saveCheckIn: (data) => USE_MOCK ? wait(400).then(() => ({ ok: true })) : callApi('/checkin', data)
+    };
+    // ===================== END BACKEND CONNECTION ========================
+
+    // ---------- helpers ----------
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    const toastBox = document.createElement('div');
+    toastBox.id = 'toastBox';
+    toastBox.setAttribute('role', 'status');
+    toastBox.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toastBox);
+    function showToast(msg, kind) {
+      const t = document.createElement('div');
+      t.className = 'toast ' + (kind || '');
+      t.textContent = msg;
+      toastBox.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // ---------- accessibility labels ----------
+    document.querySelectorAll('button[title]:not([aria-label])').forEach(b => b.setAttribute('aria-label', b.getAttribute('title')));
+    document.getElementById('themeToggleBtn').setAttribute('aria-label', 'Toggle light or dark theme');
+    document.getElementById('closeModalX').setAttribute('aria-label', 'Close plan review');
+    document.getElementById('chatInput').setAttribute('aria-label', 'Message CampusPilot');
+    document.getElementById('languageSelect').setAttribute('aria-label', 'Voice and reply language');
+    document.getElementById('studyHoursRange').setAttribute('aria-label', 'Daily study hours');
+    document.getElementById('breakLengthRange').setAttribute('aria-label', 'Break length in minutes');
+    document.getElementById('voiceToggle').setAttribute('aria-label', 'Enable voice mode');
+    document.getElementById('cameraToggle').setAttribute('aria-label', 'Enable camera');
+    document.getElementById('diffModal').setAttribute('role', 'dialog');
+    document.getElementById('diffModal').setAttribute('aria-modal', 'true');
+    document.getElementById('diffModal').setAttribute('aria-label', 'Review proposed plan');
+
+    // ---------- voice ----------
+    const micBtn = document.getElementById('micBtn');
+    const speakerBtn = document.getElementById('speakerBtn');
+    const speakerIcon = document.getElementById('speakerIcon');
+    const languageSelect = document.getElementById('languageSelect');
+    const voiceToggle = document.getElementById('voiceToggle');
+    const langMap = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+    let speakReplies = true;
+    speakerBtn.setAttribute('aria-pressed', 'true');
+
+    function setListeningUI(on) {
+      isListening = on;
+      micBtn.classList.toggle('animate-mic-pulse', on);
+      micBtn.classList.toggle('bg-rose-500/30', on);
+      micBtn.classList.toggle('text-rose-400', on);
+      micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    micBtn.addEventListener('click', () => {
+      if (!voiceToggle.checked) { showToast('Voice mode is off. Turn it on in the sidebar, or type your message.', 'err'); return; }
+      if (!SpeechRec) { showToast('Voice input is not supported in this browser. Use Chrome or Edge, or type your message.', 'err'); return; }
+      if (isListening && recognition) { recognition.stop(); return; }
+      recognition = new SpeechRec();
+      recognition.lang = langMap[languageSelect.value] || 'en-US';
+      recognition.interimResults = false;
+      recognition.onstart = () => setListeningUI(true);
+      recognition.onend = () => setListeningUI(false);
+      recognition.onerror = (e) => {
+        setListeningUI(false);
+        const msg = e.error === 'not-allowed' ? 'Microphone permission was blocked. Allow it in the browser, or type instead.' : 'I could not hear that. Please try again or type your message.';
+        showToast(msg, 'err');
+      };
+      recognition.onresult = (e) => {
+        const heard = e.results[0][0].transcript;
+        chatInput.value = heard;
+        sendMessage(heard);
+      };
+      try { recognition.start(); } catch (err) { setListeningUI(false); }
+    });
+
+    speakerBtn.addEventListener('click', () => {
+      speakReplies = !speakReplies;
+      speakerBtn.setAttribute('aria-pressed', speakReplies ? 'true' : 'false');
+      speakerIcon.setAttribute('data-lucide', speakReplies ? 'volume-2' : 'volume-x');
+      if (!speakReplies && window.speechSynthesis) speechSynthesis.cancel();
+      lucide.createIcons();
+      showToast(speakReplies ? 'Spoken replies on' : 'Spoken replies muted');
+    });
+
+    voiceToggle.addEventListener('change', () => {
+      if (!voiceToggle.checked) {
+        if (recognition && isListening) recognition.stop();
+        if (window.speechSynthesis) speechSynthesis.cancel();
+      }
+    });
+
+    function speak(text) {
+      if (!speakReplies || !voiceToggle.checked || !window.speechSynthesis) return;
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = langMap[languageSelect.value] || 'en-US';
+      speechSynthesis.speak(u);
+    }
+
+    // ---------- camera toggle (off by default, nothing is recorded here) ----------
+    const cameraToggle = document.getElementById('cameraToggle');
+    const cameraRow = cameraToggle.closest('div.flex.items-center.justify-between');
+    const cameraStatus = cameraRow.querySelector('.text-\\[10px\\]');
+    cameraToggle.addEventListener('change', () => {
+      cameraStatus.textContent = cameraToggle.checked ? 'On (gesture mode, optional)' : 'Off (Privacy-locked)';
+      window.dispatchEvent(new CustomEvent('campuspilot:camera', { detail: { enabled: cameraToggle.checked } }));
+    });
+
+    // ---------- chat ----------
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+    const chatSubmitBtn = document.getElementById('chatSubmitBtn');
+    const chatMessageLog = document.getElementById('chatMessageLog');
+    const agentThinkingBox = document.getElementById('agentThinkingBox');
+    chatMessageLog.setAttribute('role', 'log');
+    chatMessageLog.setAttribute('aria-live', 'polite');
+    let isSending = false;
+
+    function addUserBubble(text) {
+      const d = document.createElement('div');
+      d.className = 'flex items-start justify-end gap-3 animate-fade-up';
+      d.innerHTML = '<div class="glass-card bg-indigo-600/30 border-indigo-500/30 p-3.5 rounded-2xl rounded-tr-sm text-sm text-slate-100 max-w-md shadow-sm">' + esc(text) + '</div>' +
+        '<div class="w-8 h-8 rounded-xl bg-slate-700 flex items-center justify-center text-slate-200 shrink-0 font-bold text-xs">AV</div>';
+      chatMessageLog.insertBefore(d, agentThinkingBox);
+    }
+
+    function addAgentBubble(data) {
+      const calls = data.tool_calls || [];
+      const chips = calls.map(c => {
+        const warn = c.status === 'warn';
+        const cls = warn ? 'bg-amber-500/20 border-amber-500/35 text-amber-300' : 'bg-blue-500/15 border-blue-500/25 text-blue-300';
+        return '<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium ' + cls + '"><i class="w-3 h-3" data-lucide="' + (warn ? 'alert-triangle' : 'check-circle') + '"></i><span>' + esc(c.summary || c.name) + '</span></div>';
+      }).join('');
+      const trace = calls.map((c, i) => '<div class="' + (c.status === 'warn' ? 'text-amber-300' : 'text-blue-300') + '">' + (i + 1) + '. ' + esc(c.name) + ' → ' + esc(c.summary || '') + '</div>').join('');
+      const reasoning = calls.length ? '<details class="group bg-white/5 rounded-xl border border-white/5 overflow-hidden text-xs"><summary class="p-2.5 cursor-pointer text-slate-400 hover:text-slate-200 select-none font-mono">Agent reasoning &amp; tool calls (' + calls.length + ' steps)</summary><div class="p-3 bg-black/30 border-t border-white/5 font-mono text-[11px] space-y-2">' + trace + '</div></details>' : '';
+      const notice = data.notice ? '<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-[11px] font-medium text-amber-200"><i class="w-3 h-3 text-amber-400" data-lucide="info"></i><span>' + esc(data.notice) + '</span></div>' : '';
+      const d = document.createElement('div');
+      d.className = 'flex items-start gap-3 animate-fade-up';
+      d.innerHTML = '<div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md"><i class="w-4 h-4" data-lucide="bot"></i></div>' +
+        '<div class="space-y-2 max-w-2xl"><div class="glass-card p-4 rounded-2xl rounded-tl-sm text-sm text-slate-200 leading-relaxed">' + esc(data.reply || '').replace(/\n/g, '<br>') + '</div>' +
+        (notice || chips ? '<div class="flex flex-wrap items-center gap-2 pt-1">' + notice + chips + '</div>' : '') + reasoning + '</div>';
+      chatMessageLog.insertBefore(d, agentThinkingBox);
+      lucide.createIcons();
+    }
+
+    function addErrorBubble(text, message) {
+      const d = document.createElement('div');
+      d.className = 'flex items-start gap-3 animate-fade-up';
+      const detail = message || 'Something went wrong and I could not finish that. Your plan has not been changed.';
+      d.innerHTML = '<div class="w-8 h-8 rounded-xl bg-rose-600/80 flex items-center justify-center text-white shrink-0"><i class="w-4 h-4" data-lucide="alert-circle"></i></div>' +
+        '<div class="space-y-2 max-w-2xl"><div class="glass-card p-4 rounded-2xl rounded-tl-sm text-sm text-rose-200 border border-rose-500/30">' + esc(detail) + '</div>' +
+        '<button type="button" class="retry-btn px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-xs font-semibold">Retry</button></div>';
+      d.querySelector('.retry-btn').addEventListener('click', () => { d.remove(); sendMessage(text, true); });
+      chatMessageLog.insertBefore(d, agentThinkingBox);
+      lucide.createIcons();
+    }
+
+    async function sendMessage(text, isRetry) {
+      text = (text || '').trim();
+      if (!text || isSending) return;
+      isSending = true;
+      chatSubmitBtn.classList.add('burst-active');
+      setTimeout(() => chatSubmitBtn.classList.remove('burst-active'), 500);
+      if (!isRetry) addUserBubble(text);
+      chatInput.value = '';
+      agentThinkingBox.classList.remove('hidden');
+      chatMessageLog.scrollTop = chatMessageLog.scrollHeight;
+      try {
+        const data = await api.chat(text, languageSelect.value);
+        agentThinkingBox.classList.add('hidden');
+        addAgentBubble(data);
+        speak(data.reply || '');
+        if (data.saved_plan_id) {
+          currentProposal = null;
+          closeModal();
+          showToast('Plan saved', 'ok');
+        }
+        if (data.proposed_plan) {
+          currentProposal = data.proposed_plan;
+          renderProposal(currentProposal);
+          openModal();
+        }
+        loadState().catch(() => {});
+      } catch (err) {
+        agentThinkingBox.classList.add('hidden');
+        addErrorBubble(text, err.message);
+      }
+      chatMessageLog.scrollTop = chatMessageLog.scrollHeight;
+      isSending = false;
+    }
+
+    chatForm.addEventListener('submit', (e) => { e.preventDefault(); sendMessage(chatInput.value); });
+
+    document.querySelectorAll('.quick-prompt-btn').forEach(btn => {
+      btn.addEventListener('click', () => sendMessage(btn.textContent.trim().replace(/^[^\w\s]+/, '').trim()));
+    });
+
+    // ---------- task cards: complete, postpone, edit duration ----------
+    function refreshProgress() {
+      const boxes = document.querySelectorAll('#taskListContainer .task-checkbox');
+      const done = Array.from(boxes).filter(b => b.checked).length;
+      document.getElementById('completedTasksCount').textContent = done;
+      document.getElementById('planProgressBar').style.width = (boxes.length ? Math.round(done / boxes.length * 100) : 0) + '%';
+    }
+
+    async function setTaskDone(card, done) {
+      const box = card.querySelector('.task-checkbox');
+      const title = card.querySelector('.task-title');
+      box.checked = done;
+      card.classList.toggle('opacity-75', done);
+      title.classList.toggle('line-through', done);
+      refreshProgress();
+      try {
+        await api.completeTask(card.dataset.taskId, done);
+        showToast(done ? 'Marked done: ' + title.textContent : 'Marked not done: ' + title.textContent, 'ok');
+        await loadState();
+      } catch (err) {
+        box.checked = !done;
+        card.classList.toggle('opacity-75', !done);
+        title.classList.toggle('line-through', !done);
+        refreshProgress();
+        showToast(err.message || 'Could not update the task. Please try again.', 'err');
+      }
+    }
+
+    const taskList = document.getElementById('taskListContainer');
+    taskList.addEventListener('click', async (e) => {
+      const card = e.target.closest('[data-task-id]');
+      if (!card) return;
+      if (e.target.closest('.action-complete')) {
+        setTaskDone(card, !card.querySelector('.task-checkbox').checked);
+      } else if (e.target.closest('.action-postpone')) {
+        try {
+          await api.postponeTask(card.dataset.taskId);
+          showToast('Postponed: ' + card.querySelector('.task-title').textContent, 'ok');
+          await loadState();
+        } catch (err) {
+          showToast(err.message || 'Could not postpone the task. Please try again.', 'err');
+        }
+      } else if (e.target.closest('.duration-text')) {
+        const el = e.target.closest('.duration-text');
+        const current = parseInt(el.textContent, 10) || 30;
+        const answer = prompt('Estimated minutes for this task (5 to 480):', current);
+        if (answer === null) return;
+        const mins = parseInt(answer, 10);
+        if (isNaN(mins) || mins < 5 || mins > 480) { showToast('Please enter a number between 5 and 480.', 'err'); return; }
+        try {
+          await api.updateDuration(card.dataset.taskId, mins);
+          el.textContent = mins + ' min';
+          showToast('Duration updated to ' + mins + ' min', 'ok');
+          await loadState();
+        } catch (err) {
+          showToast(err.message || 'Could not update the duration. Please try again.', 'err');
+        }
+      }
+    });
+    taskList.addEventListener('change', (e) => {
+      if (e.target.classList.contains('task-checkbox')) setTaskDone(e.target.closest('[data-task-id]'), e.target.checked);
+    });
+    document.querySelectorAll('.duration-text').forEach(el => {
+      el.setAttribute('title', 'Click to edit duration');
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.click(); });
+    });
+
+    // Modal
+    const diffModal = document.getElementById('diffModal');
+    const openNewPlanBtn = document.getElementById('openNewPlanBtn');
+    const triggerDiffModalBtn = document.getElementById('triggerDiffModalBtn');
+    const closeModalX = document.getElementById('closeModalX');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const confirmSavePlanBtn = document.getElementById('confirmSavePlanBtn');
+    const modalSuccessState = document.getElementById('modalSuccessState');
+    const closeSuccessModalBtn = document.getElementById('closeSuccessModalBtn');
+
+    let lastFocused = null;
+    function openModal() {
+      lastFocused = document.activeElement;
+      diffModal.classList.remove('hidden');
+      modalSuccessState.classList.add('hidden');
+      confirmSavePlanBtn.focus();
+    }
+
+    function openProposal() {
+      if (!currentProposal) {
+        showToast('No proposal is waiting. Ask me to plan your next two days first.', 'err');
+        return;
+      }
+      renderProposal(currentProposal);
+      openModal();
+    }
+    function closeModal() {
+      diffModal.classList.add('hidden');
+      if (lastFocused) lastFocused.focus();
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !diffModal.classList.contains('hidden')) closeModal();
+    });
+    document.getElementById('modifyPlanBtn').addEventListener('click', async () => {
+      try { await api.cancelPlan(); } catch (err) { /* nothing pending is fine */ }
+      currentProposal = null;
+      closeModal();
+      setActiveTab('chat');
+      chatInput.placeholder = 'What would you like to change in this plan?';
+      chatInput.focus();
+      loadState().catch(() => {});
+    });
+
+    openNewPlanBtn.addEventListener('click', () => {
+      setActiveTab('chat');
+      chatInput.placeholder = 'Plan my next two days, or tell me what changed...';
+      chatInput.focus();
+    });
+    triggerDiffModalBtn.addEventListener('click', openProposal);
+    closeModalX.addEventListener('click', closeModal);
+    cancelModalBtn.addEventListener('click', async () => {
+      try { await api.cancelPlan(); } catch (err) { /* nothing pending is fine */ }
+      currentProposal = null;
+      closeModal();
+      showToast('Proposal discarded. Nothing was saved.', 'ok');
+      loadState().catch(() => {});
+    });
+    confirmSavePlanBtn.addEventListener('click', async () => {
+      if (!currentProposal) { showToast('No proposal to save.', 'err'); return; }
+      confirmSavePlanBtn.disabled = true;
+      confirmSavePlanBtn.textContent = 'Saving...';
+      try {
+        await api.savePlan({ plan_id: currentProposal.plan_id });
+        currentProposal = null;
+        modalSuccessState.classList.remove('hidden');
+        loadState().catch(() => {});
+      } catch (err) {
+        showToast(err.message || 'Could not save the plan. Please try again.', 'err');
+      }
+      confirmSavePlanBtn.disabled = false;
+      confirmSavePlanBtn.textContent = 'Confirm and Save';
+    });
+    closeSuccessModalBtn.addEventListener('click', closeModal);
+
+    // Check-in handlers
+    let currentStatus = "Completed";
+    let currentMood = "Okay";
+    const previewEl = document.getElementById('checkInPreviewText');
+
+    function updatePreview() {
+      // INTEGRATION: no fake schedule promises; a check-in is a record only.
+      previewEl.innerHTML = `Status: <strong>${currentStatus}</strong>. Mood: <strong>${currentMood}</strong>. Saved for your records; your plan changes only if you ask in chat.`;
+    }
+
+    document.querySelectorAll('.checkin-status-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.checkin-status-btn').forEach(b => {
+          b.className = 'checkin-status-btn py-2 px-1 rounded-lg text-slate-300 hover:text-white transition-all';
+        });
+        btn.className = 'checkin-status-btn py-2 px-1 rounded-lg bg-indigo-600 text-white font-semibold shadow-sm transition-all';
+        currentStatus = btn.getAttribute('data-status');
+        updatePreview();
+      });
+    });
+
+    document.querySelectorAll('.mood-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mood-btn').forEach(b => {
+          b.className = 'mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs transition-all cursor-pointer group';
+        });
+        btn.className = 'mood-btn flex flex-col items-center justify-center p-2 rounded-xl bg-indigo-600/30 border border-indigo-500/50 text-xs transition-all ring-1 ring-indigo-400 cursor-pointer group';
+        currentMood = btn.getAttribute('data-mood');
+        updatePreview();
+      });
+    });
+
+    document.getElementById('saveCheckInBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('saveCheckInBtn');
+      btn.disabled = true;
+      try {
+        await api.saveCheckIn({ status: currentStatus, mood: currentMood });
+        btn.textContent = "Saved ✓";
+        btn.classList.add('bg-emerald-600');
+        setTimeout(() => {
+          btn.textContent = "Save Check-In";
+          btn.classList.remove('bg-emerald-600');
+        }, 2000);
+        loadState().catch(() => {});
+      } catch (err) {
+        showToast(err.message || 'Could not save the check-in. Please try again.', 'err');
+      }
+      btn.disabled = false;
+    });
+    /* =================================================================
+       INTEGRATION: real state rendering.
+       GET /state is the read model. Person 3's element IDs and CSS
+       classes are preserved; only the placeholder contents change.
+       ================================================================= */
+    let latestState = null;
+
+    function fmtTime(iso) {
+      if (!iso) return '--:--';
+      return new Date(iso).toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata'
+      });
+    }
+    function fmtDay(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleDateString('en-IN', {
+        weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata'
+      });
+    }
+    function fmtWhen(iso) { return iso ? fmtDay(iso) + ' • ' + fmtTime(iso) : 'Not scheduled'; }
+
+    function dueLabel(iso) {
+      if (!iso) return 'No due date';
+      const diff = new Date(iso).getTime() - Date.now();
+      if (diff <= 0) return 'Overdue';
+      const hours = Math.round(diff / 36e5);
+      if (hours < 48) return hours + 'h left';
+      return Math.round(hours / 24) + 'd left';
+    }
+
+    const PRIORITY_STYLE = {
+      high: { label: 'High Priority', border: 'border-l-rose-500', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+      medium: { label: 'Medium Priority', border: 'border-l-amber-500', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+      low: { label: 'Low Priority', border: 'border-l-emerald-500', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' }
+    };
+    const STATUS_STYLE = {
+      pending: { text: 'Pending', cls: 'bg-white/5 text-slate-300' },
+      in_progress: { text: 'In Progress', cls: 'bg-blue-500/20 text-blue-300' },
+      completed: { text: 'Completed', cls: 'bg-emerald-500/15 text-emerald-300' },
+      postponed: { text: 'Postponed', cls: 'bg-amber-500/15 text-amber-300' }
+    };
+    const KIND_STYLE = {
+      class: { border: 'border-blue-500', orb: 'bg-blue-600', pill: 'bg-blue-500/20 text-blue-300 border-blue-500/30', icon: 'book-open', label: 'Class' },
+      seminar: { border: 'border-amber-400', orb: 'bg-amber-500', pill: 'bg-amber-500/20 text-amber-200 border-amber-500/30', icon: 'users', label: 'Seminar' },
+      sport: { border: 'border-emerald-500', orb: 'bg-emerald-600', pill: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: 'activity', label: 'Physical' },
+      study: { border: 'border-purple-500', orb: 'bg-purple-600', pill: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: 'book', label: 'Study' },
+      break: { border: 'border-emerald-500', orb: 'bg-emerald-600', pill: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: 'coffee', label: 'Break' }
+    };
+
+    function renderProfile(state) {
+      const profile = state.profile || {};
+      const prefs = state.preferences || {};
+      const tasks = state.tasks || [];
+      const pendingTasks = tasks.filter(t => t.status !== 'completed');
+      const pendingHours = pendingTasks.reduce((sum, t) => sum + (t.estimated_minutes || 0), 0) / 60;
+
+      document.getElementById('profileName').textContent = profile.name || 'Student';
+      document.getElementById('profileSubtitle').textContent = profile.subtitle || 'CampusPilot demo student';
+      document.getElementById('profileInitials').textContent = profile.initials || 'CP';
+      document.getElementById('profileMeta').textContent =
+        'Local demo • SQLite • ' + (state.llm === 'live' ? 'live AI' : 'offline quick mode');
+      document.getElementById('dateLabel').textContent = state.date_label || 'Today';
+      document.getElementById('modelLabel').textContent =
+        state.llm === 'live' ? 'Gemini (live)' : 'Rule-based quick mode';
+      document.getElementById('syncBadge').textContent =
+        state.active_plan ? 'Active plan synced' : 'No active plan';
+      document.getElementById('badgeTasksCount').textContent = pendingTasks.length;
+
+      const pendingPlan = state.pending_plan;
+      const conflicts = (state.conflicts || []).length;
+      document.getElementById('conflictBadge').textContent =
+        conflicts + ' conflict' + (conflicts === 1 ? '' : 's');
+
+      document.getElementById('studyHoursVal').textContent = pendingHours.toFixed(1) + ' hrs';
+      const range = document.getElementById('studyHoursRange');
+      range.value = Math.max(2, Math.min(8, pendingHours));
+      document.getElementById('breakLengthVal').textContent = (prefs.preferred_break_minutes || 15) + ' min';
+      document.getElementById('breakLengthRange').value = Math.max(5, Math.min(30, prefs.preferred_break_minutes || 15));
+      document.getElementById('targetLabel').textContent = 'Target: ' + pendingHours.toFixed(1) + 'h Study';
+
+      const summary = [];
+      summary.push(pendingTasks.length + ' pending task(s) in your local SQLite data.');
+      summary.push('Planning window ' + (prefs.daily_start_time || '09:00') + '–' + (prefs.daily_end_time || '22:00') + ', max focus ' + (prefs.max_focus_minutes || 90) + ' min.');
+      if (pendingPlan) summary.push('A plan proposal is waiting for your review.');
+      else if (state.active_plan) summary.push('An active plan is saved; ask in chat to rework it when something changes.');
+      else summary.push('Ask in chat to plan your next two days.');
+      if (state.notices && state.notices.unread) summary.push(state.notices.unread + ' unread notice(s).');
+      if (conflicts) summary.push(conflicts + ' deadline conflict(s) flagged.');
+      document.getElementById('dashboardSummary').textContent = summary.join(' ');
+
+      const counts = state.counts || { total: tasks.length, completed: 0, percent: 0 };
+      document.getElementById('completedTasksCount').textContent = counts.completed;
+      document.getElementById('totalTasksCount').textContent = counts.total;
+      document.getElementById('totalHoursLabel').textContent = '(' + pendingHours.toFixed(1) + 'h pending)';
+      document.getElementById('planProgressBar').style.width = (counts.percent || 0) + '%';
+    }
+
+    function renderTasks(state) {
+      const container = document.getElementById('taskListContainer');
+      if (!container) return;
+      const tasks = state.tasks || [];
+      if (!tasks.length) {
+        container.innerHTML = '<div class="glass-card p-4 rounded-xl text-sm text-slate-400">No tasks yet. Ask the agent to add one.</div>';
+        return;
+      }
+
+      container.innerHTML = tasks.map((task, index) => {
+        const priority = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.medium;
+        const status = STATUS_STYLE[task.status] || STATUS_STYLE.pending;
+        const done = task.status === 'completed';
+        const progress = done ? 100 : task.status === 'in_progress' ? 60 : task.status === 'postponed' ? 25 : 10;
+        const slot = task.slot ? 'Slot: ' + fmtWhen(task.slot.start_at) : 'Not scheduled yet';
+        const dueText = done ? 'Completed' : dueLabel(task.due_at);
+        return ''
+          + '<div class="rope-card-wrapper animate-rope-drop-p' + ((index % 4) + 1) + '" data-priority="' + esc(task.priority || 'medium') + '">'
+          +   '<div class="rope-line left"></div><div class="rope-line right"></div>'
+          +   '<div class="glass-card p-4 rounded-xl flex items-start gap-3.5 group relative border-l-4 ' + priority.border + (done ? ' opacity-75' : '') + '" data-task-id="' + esc(task.task_id) + '">'
+          +     '<div class="pt-0.5"><input class="task-checkbox w-5 h-5 rounded-lg border-white/20 bg-white/5 text-indigo-600 focus:ring-0 cursor-pointer accent-indigo-500" type="checkbox"' + (done ? ' checked' : '') + '/></div>'
+          +     '<div class="flex-1 min-w-0">'
+          +       '<div class="flex items-center justify-between gap-2 flex-wrap">'
+          +         '<div class="flex items-center gap-2 flex-wrap">'
+          +           '<h5 class="task-title text-sm font-bold ' + (done ? 'line-through text-slate-400' : 'text-white') + ' group-hover:text-indigo-300 transition-colors">' + esc(task.title) + '</h5>'
+          +           '<span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ' + priority.badge + '">' + priority.label + '</span>'
+          +           '<span class="px-2 py-0.5 rounded-md text-[10px] font-medium ' + status.cls + '">' + status.text + '</span>'
+          +         '</div>'
+          +         '<span class="font-mono text-xs font-bold ' + (done ? 'text-emerald-400' : 'text-rose-400') + '">' + dueText + '</span>'
+          +       '</div>'
+          +       '<p class="text-xs text-slate-400 mt-1">Estimated ' + (task.estimated_minutes || 30) + ' min • Due ' + fmtWhen(task.due_at) + '</p>'
+          +       '<div class="mt-2.5 space-y-1">'
+          +         '<div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden"><div class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full" style="width:' + progress + '%"></div></div>'
+          +         '<div class="flex items-center justify-between text-[10px] text-slate-400"><span>' + status.text + '</span><span>' + esc(slot) + '</span></div>'
+          +       '</div>'
+          +       '<div class="flex items-center gap-4 mt-3 text-xs text-slate-300 flex-wrap">'
+          +         '<span class="flex items-center gap-1 text-slate-300"><i class="w-3.5 h-3.5 text-blue-400" data-lucide="calendar"></i>Due ' + fmtDay(task.due_at) + '</span>'
+          +         '<span class="flex items-center gap-1 text-slate-400"><i class="w-3.5 h-3.5 text-slate-500" data-lucide="clock"></i>Est. Duration: <strong class="text-slate-200 duration-text" title="Click to edit duration">' + (task.estimated_minutes || 30) + ' min</strong></span>'
+          +       '</div>'
+          +     '</div>'
+          +     '<div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">'
+          +       '<button class="action-complete p-2 rounded-lg hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400" title="' + (done ? 'Mark not done' : 'Mark done') + '"><i class="w-4 h-4" data-lucide="' + (done ? 'rotate-ccw' : 'check') + '"></i></button>'
+          +       '<button class="action-postpone p-2 rounded-lg hover:bg-amber-500/20 text-slate-400 hover:text-amber-400" title="Postpone by one day"><i class="w-4 h-4" data-lucide="corner-down-right"></i></button>'
+          +     '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderTimeline(state) {
+      const container = document.getElementById('timelineBranchContainer');
+      if (!container) return;
+      const items = (state.timeline || []).slice();
+      for (const item of (state.pending_plan && state.pending_plan.items) || []) {
+        if (item.status === 'proposed') {
+          items.push({ id: item.item_id, title: item.title, start_at: item.start_at, end_at: item.end_at, kind: 'study', status: 'proposed', location: 'Proposed — not saved' });
+        }
+      }
+      items.sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+      if (!items.length) {
+        container.innerHTML = '<div class="glass-card p-4 rounded-xl text-sm text-slate-400">No events in this window yet.</div>';
+        return;
+      }
+
+      container.innerHTML = items.map(item => {
+        const proposed = item.status === 'proposed';
+        const style = proposed ? { border: 'border-amber-400', orb: 'bg-amber-400', pill: 'bg-amber-400/20 text-amber-200 border-amber-400/40', icon: 'sparkles', label: 'AI Proposed' } : (KIND_STYLE[item.kind] || KIND_STYLE.class);
+        const cardClass = proposed
+          ? 'border-dashed border-2 animate-pulse-glow bg-amber-500/10'
+          : 'glass-card';
+        return ''
+          + '<div class="branch-event-node relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group">'
+          +   '<div class="w-full md:w-[45%] md:text-right order-2 md:order-1">'
+          +     '<div class="' + cardClass + ' p-4 rounded-2xl border-l-4 md:border-l-0 md:border-r-4 ' + style.border + ' ml-12 md:ml-0 transition-all duration-300">'
+          +       '<div class="flex items-center md:justify-end gap-2 mb-1 flex-wrap">'
+          +         '<span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ' + style.pill + '">' + style.label + '</span>'
+          +         '<span class="text-xs font-bold text-white">' + esc(item.title) + '</span>'
+          +       '</div>'
+          +       '<p class="text-xs text-slate-300">' + esc(item.location || (item.is_fixed ? 'Fixed calendar event' : 'Scheduled block')) + '</p>'
+          +       '<div class="flex items-center md:justify-end gap-2 mt-2 text-[11px] text-slate-400 flex-wrap"><span>' + fmtDay(item.start_at) + ' • ' + fmtTime(item.start_at) + ' – ' + fmtTime(item.end_at) + '</span><span class="text-slate-600">•</span><span>' + esc(item.status) + '</span></div>'
+          +       (proposed ? '<button type="button" class="proposal-review-btn mt-2 px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs">Review proposal</button>' : '')
+          +     '</div>'
+          +   '</div>'
+          +   '<div class="absolute md:static left-3 top-4 md:top-auto flex items-center justify-center shrink-0 order-1 md:order-2 z-20"><div class="branch-central-orb w-9 h-9 rounded-full ' + style.orb + ' text-white flex items-center justify-center ring-4 ring-[#0b0f19]"><i class="w-4 h-4" data-lucide="' + style.icon + '"></i></div></div>'
+          +   '<div class="w-full md:w-[45%] order-3 pl-12 md:pl-0 flex items-center gap-3"><div class="hidden md:flex items-center gap-2 text-slate-300 font-mono text-xs font-bold bg-white/5 border border-white/10 px-3 py-1 rounded-full"><i class="w-3.5 h-3.5" data-lucide="clock"></i><span>' + fmtTime(item.start_at) + '</span></div><span class="text-xs text-slate-500 hidden md:inline">' + fmtDay(item.start_at) + '</span></div>'
+          + '</div>';
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderDeadlines(state) {
+      const container = document.getElementById('deadlineItems');
+      if (!container) return;
+      const items = (state.tasks || [])
+        .filter(task => task.status !== 'completed' && task.due_at)
+        .sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)));
+      const conflictNotes = (state.conflicts || []).map(note =>
+        '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200">' + esc(note) + '</div>'
+      ).join('');
+      if (!items.length) {
+        container.innerHTML = conflictNotes + '<div class="p-3 text-xs text-slate-400">No upcoming deadlines.</div>';
+        return;
+      }
+      container.innerHTML = conflictNotes + items.slice(0, 5).map(task => {
+        const priority = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.medium;
+        const width = task.status === 'postponed' ? 25 : task.priority === 'high' ? 75 : 40;
+        return ''
+          + '<div class="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-indigo-500/30 transition-colors">'
+          +   '<div class="flex items-center justify-between text-xs gap-2"><span class="font-semibold text-slate-200 truncate">' + esc(task.title) + '</span><span class="font-mono text-xs ' + (width >= 75 ? 'text-rose-400 font-bold' : 'text-slate-300') + '">' + dueLabel(task.due_at) + '</span></div>'
+          +   '<div class="w-full bg-white/10 h-2 rounded-full overflow-hidden"><div class="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full" style="width:' + width + '%"></div></div>'
+          +   '<div class="flex justify-between text-[10px] text-slate-400 gap-2"><span>' + priority.label + '</span><span>Due ' + fmtWhen(task.due_at) + '</span></div>'
+          + '</div>';
+      }).join('');
+    }
+
+    function renderProposal(proposal) {
+      if (!proposal) return;
+      currentProposal = proposal;
+      const diff = proposal.diff || {};
+      const buckets = [
+        ['added', '+', 'ADDED', 'emerald'],
+        ['moved', '↔', 'MOVED', 'amber'],
+        ['removed', '−', 'REMOVED', 'rose'],
+        ['unchanged', '=', 'UNCHANGED', 'slate']
+      ];
+      const entries = [];
+      buckets.forEach(([key, symbol, label, color]) => {
+        (diff[key] || []).forEach(entry => entries.push({ key, symbol, label, color, entry }));
+      });
+
+      const modifications = (diff.added || []).length + (diff.moved || []).length + (diff.removed || []).length;
+      document.getElementById('diffModalSubtitle').textContent =
+        proposal.plan_id + ' • ' + ((proposal.items || []).length) + ' proposed block(s)';
+      document.getElementById('diffCountLabel').textContent =
+        modifications + ' Modification' + (modifications === 1 ? '' : 's');
+
+      const warnings = (proposal.warnings || []).map(note =>
+        '<div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-200 text-[11px]">' + esc(note) + '</div>'
+      ).join('');
+      const summary = proposal.summary
+        ? '<div class="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-[11px]">' + esc(proposal.summary) + '</div>'
+        : '';
+
+      const rows = entries.map(({ key, symbol, label, color, entry }) => {
+        let range = '';
+        if (key === 'moved') range = fmtWhen(entry.from_start) + ' → ' + fmtWhen(entry.to_start);
+        else if (key === 'added') range = '→ ' + fmtWhen(entry.to_start);
+        else if (key === 'removed') range = 'was ' + fmtWhen(entry.from_start);
+        else range = fmtWhen(entry.to_start || entry.from_start);
+        return ''
+          + '<div class="p-3 rounded-xl bg-' + color + '-500/10 border border-' + color + '-500/25 flex items-start gap-3">'
+          +   '<span class="w-5 h-5 rounded-full bg-' + color + '-500/20 text-' + color + '-400 flex items-center justify-center font-bold text-xs shrink-0">' + symbol + '</span>'
+          +   '<div class="min-w-0">'
+          +     '<div class="font-bold text-' + color + '-300">[' + label + '] ' + esc(entry.title) + '</div>'
+          +     '<div class="text-slate-300 text-[11px] mt-0.5">' + esc(entry.reason || '') + '</div>'
+          +     '<div class="text-slate-400 text-[10px] mt-0.5 font-mono">' + range + '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+
+      document.getElementById('diffList').innerHTML = warnings + summary + (rows ||
+        '<div class="p-3 rounded-xl bg-white/5 border border-white/10 text-slate-400 text-[11px]">This proposal has no recorded changes.</div>');
+      lucide.createIcons();
+    }
+
+    function renderWelcome(state) {
+      Array.from(chatMessageLog.children).forEach(child => {
+        if (child !== agentThinkingBox) child.remove();
+      });
+      const name = (state.profile && state.profile.name) || 'there';
+      const first = name.split(' ')[0];
+      const pending = state.pending_plan ? ' A plan proposal is waiting — open Review Diff.' : '';
+      addAgentBubble({
+        reply: 'Hi ' + first + '. I am connected to your local SQLite data.' + pending + ' Ask me to plan your next two days, mark something complete, or tell me what changed.',
+        tool_calls: []
+      });
+    }
+
+    async function loadState() {
+      const res = await fetch(API_BASE + '/state', { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error('Could not load state (' + res.status + ')');
+      const state = await res.json();
+      latestState = state;
+      renderProfile(state);
+      renderTasks(state);
+      renderTimeline(state);
+      renderDeadlines(state);
+      if (!chatMessageLog.dataset.welcomed) {
+        renderWelcome(state);
+        chatMessageLog.dataset.welcomed = '1';
+      }
+      if (state.pending_plan) {
+        renderProposal(state.pending_plan);
+        if (!diffModal.classList.contains('hidden')) openModal();
+      } else {
+        currentProposal = null;
+      }
+      const past = (state.timeline || []).filter(item => new Date(item.end_at) < new Date());
+      past.sort((a, b) => String(a.end_at).localeCompare(String(b.end_at)));
+      const last = past.length ? past[past.length - 1] : null;
+      document.getElementById('checkInTitle').textContent =
+        last ? 'How did "' + last.title + '" go?' : 'How did your last study block go?';
+      updatePreview();
+      return state;
+    }
+
+    document.getElementById('timelineBranchContainer').addEventListener('click', (e) => {
+      if (e.target.closest('.proposal-review-btn')) openProposal();
+    });
+
+    loadState().catch(err => {
+      showToast(err.message || 'Could not reach the CampusPilot server.', 'err');
+      const summary = document.getElementById('dashboardSummary');
+      if (summary) summary.textContent = 'Server offline. Start it with: uvicorn server:app --port 8000';
+    });
+  </script>
+</body>
+</html>

@@ -18,6 +18,9 @@ from agent.validators import parse_days_ahead, parse_duration_minutes, to_iso
 
 ExecuteTool = Callable[[str, dict[str, Any]], DispatchOutcome]
 
+# Used when a break request names no duration ("add a coffee break").
+DEFAULT_BREAK_MINUTES = 15
+
 # ---------------------------------------------------------------------------
 # Crisis screen (pre-LLM, deterministic)
 # ---------------------------------------------------------------------------
@@ -59,6 +62,7 @@ def screen_for_crisis(text: str) -> bool:
 _PLANNING_RE = re.compile(r"\b(plan|schedule|organi[sz]e|map out)\b")
 _DAY_RE = re.compile(r"\b(day|days|week|tomorrow|today)\b")
 _LOST_RE = re.compile(r"\blost\b.*\b(hours?|hrs?|minutes?|mins?|time)\b")
+_BREAK_RE = re.compile(r"\b(break|coffee|tea|rest|pause|breather)\b")
 _MARK_RE = re.compile(r"\b(mark|marked|set)\b.*\b(complete|completed|done|finished)\b")
 _DEADLINE_RE = re.compile(r"\b(deadlines?|due)\b")
 _NOTICE_RE = re.compile(r"\b(notices?|announcements?|noticeboard)\b")
@@ -113,6 +117,9 @@ def route_fallback(
         "lost" in lowered and parse_duration_minutes(lowered) is not None
     ):
         return _replan(user_text, now=now, state=state, execute=execute)
+
+    if _BREAK_RE.search(lowered):
+        return _reserve_break(user_text, state=state, execute=execute)
 
     if _MARK_RE.search(lowered) or (
         re.search(r"\b(finished|completed)\b", lowered) and cached_tasks
@@ -199,7 +206,8 @@ def _plan_window(text: str, *, now: datetime, execute: ExecuteTool) -> FallbackR
         note = "\nSome tasks did not fit and are not scheduled."
     conflicts = slots.result.data.get("conflicts") or []
     if conflicts:
-        note += f"\nHeads-up: {conflicts[0]['note']}."
+        note_text = conflicts[0]["note"].rstrip(".")
+        note += f"\nHeads-up: {note_text}."
     return FallbackResult(
         f"Quick mode (AI unavailable) — built from your real data:\n{body}\n"
         f"Total: {total} minutes across {len(blocks)} block(s).{note}\n"
@@ -207,13 +215,15 @@ def _plan_window(text: str, *, now: datetime, execute: ExecuteTool) -> FallbackR
     )
 
 
-def _replan(text: str, *, now: datetime, state: dict[str, Any],
-            execute: ExecuteTool) -> FallbackResult:
-    lost = parse_duration_minutes(text)
-    if lost is None:
-        return FallbackResult(
-            "How much time did you lose — for example '90 minutes' or 'two hours'?"
-        )
+def _reserve(
+    minutes: int,
+    *,
+    state: dict[str, Any],
+    execute: ExecuteTool,
+    change_reason: str,
+    headline: str,
+) -> FallbackResult:
+    """Replan the active plan with ``minutes`` fewer minutes of study time."""
     last_plan = state.get("last_plan") or {}
     plan_id = state.get("active_plan_id") or last_plan.get("plan_id")
     if not plan_id:
@@ -222,11 +232,11 @@ def _replan(text: str, *, now: datetime, state: dict[str, Any],
             "two days first, then tell me what changed."
         )
     total = last_plan.get("total_minutes") if plan_id == last_plan.get("plan_id") else None
-    available = max(0, int(total) - lost) if total is not None else None
+    available = max(0, int(total) - minutes) if total is not None else None
 
     outcome = execute("replan_schedule", {
         "plan_id": plan_id,
-        "change_reason": f"lost {lost} minutes",
+        "change_reason": change_reason,
         "available_minutes": available,
     })
     if not outcome.result.success:
@@ -240,9 +250,43 @@ def _replan(text: str, *, now: datetime, state: dict[str, Any],
     lines = [_format_block(block) for block in blocks[:6]]
     body = "\n".join(f"• {line}" for line in lines) if lines else "• (nothing left to schedule)"
     return FallbackResult(
-        f"Quick mode: I reworked the plan for the {lost} minutes you lost "
-        f"({moved} block(s) moved, {dropped} dropped):\n{body}\n"
+        f"Quick mode: {headline} ({moved} block(s) moved, {dropped} dropped):\n"
+        f"{body}\n"
         "Nothing is saved yet — press Confirm to keep this version."
+    )
+
+
+def _replan(text: str, *, now: datetime, state: dict[str, Any],
+            execute: ExecuteTool) -> FallbackResult:
+    lost = parse_duration_minutes(text)
+    if lost is None:
+        return FallbackResult(
+            "How much time did you lose — for example '90 minutes' or 'two hours'?"
+        )
+    return _reserve(
+        lost,
+        state=state,
+        execute=execute,
+        change_reason=f"lost {lost} minutes",
+        headline=f"I reworked the plan for the {lost} minutes you lost",
+    )
+
+
+def _reserve_break(text: str, *, state: dict[str, Any],
+                   execute: ExecuteTool) -> FallbackResult:
+    """Quick mode can't insert a fixed break event, so it frees the time instead."""
+    minutes = parse_duration_minutes(text)
+    if minutes is None:
+        minutes = DEFAULT_BREAK_MINUTES
+    minutes = max(5, min(minutes, 120))
+    return _reserve(
+        minutes,
+        state=state,
+        execute=execute,
+        change_reason=f"reserve {minutes} minutes for a break",
+        headline=(
+            f"I reworked the plan so {minutes} minutes are free for your break"
+        ),
     )
 
 

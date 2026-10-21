@@ -1253,6 +1253,41 @@ def test_fallback_asks_for_duration_instead_of_guessing() -> None:
     assert response.used_fallback is True
 
 
+def test_fallback_reserves_a_break_by_replanning() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+    agent.handle_message("Plan my next two days")
+    plan_id = agent.export_state()["last_plan"]["plan_id"]
+    total = agent.export_state()["last_plan"]["total_minutes"]
+    assert agent.confirm_pending().tool_calls[0].success is True
+
+    response = agent.handle_message("Add a 15-min coffee break")
+
+    replan = [call for call in response.tool_calls if call.name == "replan_schedule"]
+    assert len(replan) == 1 and replan[0].success is True
+    assert replan[0].args["available_minutes"] == max(0, total - 15)
+    assert response.pending_confirmation is not None
+    assert (
+        response.pending_confirmation.diff["change_reason"]
+        == "reserve 15 minutes for a break"
+    )
+    assert backend.active_plan_id == plan_id, "a break must not save on its own"
+
+
+def test_fallback_break_defaults_to_fifteen_minutes() -> None:
+    backend = make_backend()
+    agent = make_agent(FailingLLM(), backend=backend)
+    agent.handle_message("Plan my next two days")
+    agent.confirm_pending()
+
+    response = agent.handle_message("I need a break")
+
+    replan = [call for call in response.tool_calls if call.name == "replan_schedule"]
+    assert len(replan) == 1
+    assert replan[0].args["change_reason"] == "reserve 15 minutes for a break"
+    assert "Confirm" in response.reply_text
+
+
 def test_fallback_unknown_intent_is_honest() -> None:
     response = make_agent(FailingLLM()).handle_message("tell me a joke")
     assert response.used_fallback is True

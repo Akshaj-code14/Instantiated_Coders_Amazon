@@ -1,0 +1,8 @@
+# Agent & LLM layer (Person 1) — merge into the project's requirements file.
+pydantic>=2.9
+python-dotenv>=1.0
+google-genai>=2.31
+tzdata>=2024.1        # needed for zoneinfo("Asia/Kolkata") on Windows
+
+# dev / test
+pytest>=8

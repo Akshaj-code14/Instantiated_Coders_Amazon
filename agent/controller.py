@@ -25,7 +25,11 @@ from typing import Any, Callable, Mapping
 from pydantic import ValidationError
 
 from agent.config import IST, AgentConfig, load_config
-from agent.fallback_router import route_fallback, screen_for_crisis
+from agent.fallback_router import (
+    DEFAULT_BREAK_MINUTES,
+    route_fallback,
+    screen_for_crisis,
+)
 from agent.llm_client import (
     GeminiLLMClient,
     LLMClient,
@@ -69,6 +73,9 @@ _SAVED_NEGATIONS = (
 _LOST_RE = re.compile(r"\b(lost|lose|losing|less time|short on time)\b", re.IGNORECASE)
 _AVAILABLE_RE = re.compile(
     r"\b(only have|i have|left with|available|free)\b", re.IGNORECASE
+)
+_BREAK_RE = re.compile(
+    r"\b(break|coffee|tea|rest|pause|breather)\b", re.IGNORECASE
 )
 _ENERGY_WORDS = (
     "energy", "tired", "exhausted", "drained", "sleepy", "wired", "fresh",
@@ -570,6 +577,9 @@ class CampusPilotAgent:
                     )
         if name == "replan_schedule":
             duration = parse_duration_minutes(self._turn_text)
+            if duration is None and _BREAK_RE.search(self._turn_text):
+                # "I need a break" with no duration: reserve the default.
+                duration = DEFAULT_BREAK_MINUTES
             if duration is None:
                 return ToolResult(
                     success=False,

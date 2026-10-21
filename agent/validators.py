@@ -154,11 +154,13 @@ def _parse_number(token: str) -> float | None:
 # Durations ("I lost two hours", "90 minutes", "half an hour")
 # ---------------------------------------------------------------------------
 
+# `[\s-]*` also accepts the hyphenated forms people actually type
+# ("15-min break", "2-hour slot").
 _HOUR_RE = re.compile(
-    rf"(?P<num>{_NUMBER_PATTERN})\s*(?:and\s+a\s+half\s+)?(?:hours?|hrs?|h)\b"
+    rf"(?P<num>{_NUMBER_PATTERN})[\s-]*(?:and\s+a\s+half\s+)?(?:hours?|hrs?|h)\b"
 )
 _MINUTE_RE = re.compile(
-    rf"(?P<num>{_NUMBER_PATTERN})\s*(?:minutes?|mins?|m)\b"
+    rf"(?P<num>{_NUMBER_PATTERN})[\s-]*(?:minutes?|mins?|m)\b"
 )
 _HALF_HOUR_RE = re.compile(r"\bhalf\s+an?\s+hour\b|\bhalf\s+hour\b")
 
