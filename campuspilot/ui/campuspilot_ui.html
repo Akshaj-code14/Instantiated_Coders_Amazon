@@ -470,6 +470,24 @@
   html:not(.dark).cp-contrast .glass-card{background:rgba(248,250,252,.99)}
   html.cp-contrast .text-slate-400,html.cp-contrast .text-slate-500{color:#cbd5e1}
 
+  /* ---- Magnetic cursor (module 2) ---- */
+  #cpCursor{
+    position:fixed; top:0; left:0; border:1.5px solid var(--cp-cursor);
+    pointer-events:none; z-index:9999; display:none; will-change:transform;
+    transition:width .16s ease,height .16s ease,border-radius .16s ease,border-color .16s ease;
+  }
+  #cpCursor::after{
+    content:''; position:absolute; inset:38%; border-radius:inherit;
+    background:rgb(var(--cp-glow) / .6);
+  }
+  #cpCursorGlow{
+    position:fixed; top:0; left:0; width:180px; height:180px; border-radius:9999px;
+    pointer-events:none; z-index:9998; display:none; opacity:.5; filter:blur(8px);
+    mix-blend-mode:screen; will-change:transform;
+  }
+  html:not(.dark) #cpCursorGlow{mix-blend-mode:multiply; opacity:.32}
+  html.cp-cursor-on,html.cp-cursor-on *{cursor:none!important}
+
   /* Visible keyboard focus for every new control */
   .cp-focusable:focus-visible,
   #cpSettingsDrawer :focus-visible,
@@ -2481,7 +2499,9 @@
       canvas.style.width = width + 'px';
       canvas.style.height = height + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (reduced()) drawFrame(0);
+      /* Always paint one frame: if rAF is starved (occluded webview) the
+         grid must still be there rather than invisible. */
+      drawFrame(performance.now());
     }
 
     function drawFrame(t) {
@@ -2590,6 +2610,203 @@
 
     resize();
     if (!reduced()) kick(); else drawFrame(0);
+  })();
+
+  /* ============================================================
+     MODULE 2 — MagneticCursor
+     A blended ring that follows the pointer and pulls [data-magnetic]
+     controls toward it. The original ran its element query once on
+     mount; here a MutationObserver re-scans, so task cards, modals and
+     the radial menu stay magnetic when rendered later.
+     ============================================================ */
+  (function () {
+    'use strict';
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    if (coarse) return; // never hijack the pointer on touch devices
+
+    const html = document.documentElement;
+    const cursor = document.createElement('div');
+    cursor.id = 'cpCursor';
+    cursor.setAttribute('aria-hidden', 'true');
+    const glow = document.createElement('div');
+    glow.id = 'cpCursorGlow';
+    glow.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(glow);
+    document.body.appendChild(cursor);
+
+    const settings = () => (window.cpUI ? window.cpUI.get().cursor : { on: false });
+    const magnets = new Set();
+    const seen = new WeakSet();
+    const pos = { x: -200, y: -200 };
+    const aim = { x: -200, y: -200 };
+    const halo = { x: -200, y: -200 };
+    let scale = 1;
+    let ram = 0;
+    let textMode = false;
+    let enabled = false;
+    let dragging = false;
+
+    const AUTO_TARGETS = [
+      'header button',
+      '#mainTabNav button',
+      '#chatForm button',
+      '#section-chat button',
+      'aside button',
+      'aside input[type="checkbox"] + div',
+      '[data-task-id] button',
+    ].join(',');
+
+    function shapeRadius() {
+      const shape = settings().shape || 'circle';
+      if (shape === 'square') return '4px';
+      if (shape === 'rounded') return '10px';
+      return '9999px';
+    }
+
+    function paint() {
+      cursor.style.width = settings().size + 'px';
+      cursor.style.height = settings().size + 'px';
+      cursor.style.borderRadius = shapeRadius();
+      cursor.style.borderColor = 'var(--cp-cursor)';
+      cursor.style.mixBlendMode = settings().blend || 'exclusion';
+      glow.style.background = 'radial-gradient(circle, rgb(var(--cp-glow) / .38), transparent 68%)';
+    }
+
+    function setEnabled(next) {
+      enabled = next;
+      html.classList.toggle('cp-cursor-on', next);
+      cursor.style.display = next ? 'block' : 'none';
+      glow.style.display = next ? 'block' : 'none';
+      if (!next) {
+        magnets.forEach((el) => { el.style.translate = ''; });
+        if (ram) { cancelAnimationFrame(ram); ram = 0; }
+      } else {
+        paint();
+        scan(document);
+        kick();
+      }
+    }
+
+    function applyTextMode(next) {
+      if (textMode === next) return;
+      textMode = next;
+      if (next) {
+        cursor.style.width = '2px';
+        cursor.style.height = '22px';
+        cursor.style.borderRadius = '1px';
+        cursor.style.mixBlendMode = 'normal';
+        cursor.style.borderColor = 'rgb(var(--cp-glow))';
+      } else {
+        paint();
+      }
+    }
+
+    function bind(el) {
+      if (seen.has(el)) return;
+      seen.add(el);
+      magnets.add(el);
+    }
+
+    function scan(root) {
+      if (!enabled) return;
+      const scope = root && root.querySelectorAll ? root : document;
+      scope.querySelectorAll(AUTO_TARGETS).forEach((el) => {
+        if (!el.hasAttribute('data-magnetic')) el.setAttribute('data-magnetic', '');
+      });
+      (root === document ? document : scope).querySelectorAll('[data-magnetic]').forEach(bind);
+      document.querySelectorAll('[data-magnetic]').forEach(bind);
+    }
+
+    function magneticStep() {
+      const strength = Number(settings().strength ?? 0.4);
+      magnets.forEach((el) => {
+        if (!el.isConnected) { magnets.delete(el); return; }
+        const box = el.getBoundingClientRect();
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        const dx = pos.x - cx;
+        const dy = pos.y - cy;
+        const dist = Math.hypot(dx, dy);
+        const reach = Math.max(box.width, box.height) * 0.5 + 70;
+        if (dist < reach) {
+          const pull = 1 - dist / reach;
+          el.style.translate = (dx * strength * pull).toFixed(1) + 'px ' + (dy * strength * pull).toFixed(1) + 'px';
+          el.style.transition = 'translate .08s linear';
+        } else if (el.style.translate) {
+          el.style.transition = 'translate .32s cubic-bezier(.2,.9,.2,1)';
+          el.style.translate = '0px 0px';
+        }
+      });
+    }
+
+    let lastFrameAt = 0;
+
+    function frame() {
+      ram = 0;
+      if (!enabled) return;
+      lastFrameAt = performance.now();
+      const smooth = window.cpUI && window.cpUI.reducedMotion ? 1 : 0.42;
+      pos.x += (aim.x - pos.x) * smooth;
+      pos.y += (aim.y - pos.y) * smooth;
+      halo.x += (aim.x - halo.x) * 0.14;
+      halo.y += (aim.y - halo.y) * 0.14;
+
+      const size = Number(settings().size || 28);
+      const half = size / 2;
+      const pressScale = textMode ? 1 : scale;
+      cursor.style.transform = 'translate3d(' + (pos.x - half) + 'px,' + (pos.y - half) + 'px,0) scale(' + pressScale + ')';
+      glow.style.transform = 'translate3d(' + (halo.x - 90) + 'px,' + (halo.y - 90) + 'px,0)';
+
+      magneticStep();
+      if (!window.cpUI || !window.cpUI.reducedMotion) kick();
+    }
+
+    function kick() {
+      if (!ram && enabled) ram = requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('pointermove', (event) => {
+      aim.x = event.clientX;
+      aim.y = event.clientY;
+      if (!enabled) return;
+      const target = event.target instanceof Element ? event.target : null;
+      applyTextMode(Boolean(target && target.closest('input:not([type="range"]):not([type="checkbox"]), textarea, select, [contenteditable="true"]')));
+      kick();
+    }, { passive: true });
+
+    window.addEventListener('pointerdown', () => { scale = 0.55; kick(); });
+    window.addEventListener('pointerup', () => { scale = dragging ? 0.7 : 1; kick(); });
+    document.addEventListener('campuspilot:dragging', (event) => {
+      dragging = Boolean(event.detail && event.detail.on);
+      scale = dragging ? 0.7 : 1;
+      cursor.style.borderRadius = dragging ? '3px' : shapeRadius();
+      kick();
+    });
+    window.addEventListener('blur', () => { aim.x = -200; aim.y = -200; });
+    document.addEventListener('mouseleave', () => { aim.x = -200; aim.y = -200; });
+
+    /* New nodes (task cards, modals, radial menu) become magnetic too.
+       Scanned synchronously: MutationObserver already batches, and this
+       must not depend on rAF (occluded windows starve it). */
+    const observer = new MutationObserver(() => {
+      if (enabled) scan(document);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    document.addEventListener('campuspilot:ui', (event) => {
+      if (event.detail && event.detail.path && event.detail.path.indexOf('cursor') !== 0) return;
+      setEnabled(Boolean(settings().on));
+      paint();
+    });
+
+    /* rAF is suspended for occluded windows and some embedded webviews.
+       A slow watchdog keeps the cursor following instead of freezing. */
+    setInterval(() => {
+      if (!enabled) return;
+      if (performance.now() - lastFrameAt > 350) frame();
+    }, 400);
+
+    setEnabled(Boolean(settings().on));
   })();
   </script>
 </body>
