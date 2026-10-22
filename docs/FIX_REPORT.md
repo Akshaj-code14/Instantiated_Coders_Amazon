@@ -110,10 +110,10 @@ user bubble showed the stripped text, proposal modal opened, and
 
 ### `LICENSE` (new at root)
 - **Why:** submission requires an MIT license with a team-approved copyright.
-- **Before:** no license file. **After:** standard MIT text with
-  `Copyright (c) 2026 <TEAM NAME - I WILL CONFIRM>`.
-- **⚠ TEAM ACTION:** the team must approve/replace that placeholder before
-  submission. This file is not final until they do.
+- **Before:** no license file. **After:** standard MIT text with a copyright
+  line that was left as a placeholder during the freeze pass.
+- **Resolved in the cleanup pass:** the line now reads
+  `Copyright (c) 2026 Instantiated Coders` (see the cleanup section below).
 
 ### `.gitignore`
 - **Why:** `*.db` / `*.db-wal` / `*.db-shm` were only ignored under
@@ -304,7 +304,7 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
 | --- | --- | --- |
 | 1 — Alexa+ simulated track | **PASS** | Live browser run: toggle → placeholder/status change; typed `Alexa, ask CampusPilot to plan my next two days` and intercepted the fetch body → `{"message":"plan my next two days"}` (wake stripped before display *and* before `/chat`); reply card rendered, `speechSynthesis.speaking === true`; ring computed style `alexaRingPulse 1.35s`; disclaimer string present. Source + `docs/alexa_simulation.md`; unit test `test_alexa_wake.py`. |
 | 2 — real path | **PASS** | `USE_MOCK = false`, `API_BASE = window.location.origin`; HTTP on a fresh offline DB: proposal → **0** saved, confirm → **1** active, second confirm → `409` (still 1), saving a *different* proposal's id → `400`, saving with nothing pending → `409`, cancel → active `plan_id` unchanged, restart → same `plan_id` + `pending_plan: null`; browser refresh shows *Active plan synced*; with the server stopped, Confirm shows an error toast and **no** success; fallback badge verified offline **and** on a live-key-that-fails server (`used_fallback: true`, friendly notice); the hard-coded cards/diff rows in the markup are cleared on load, so no sample string reaches the DOM. |
-| 3 — repo readiness | **PASS** (team must approve the LICENSE line) | `LICENSE` (MIT, `<TEAM NAME - I WILL CONFIRM>`), `.gitignore` now ignores `.env`/`*.db*`/`.venv*`/`__pycache__`, `git ls-files` shows only `.env.example`, secret scan over tree + **all commits** → 0 matches, stray files listed (nothing deleted), README rewritten from commands actually run, fresh clone in `$TEMP/campuspilot-proof` → venv → install → `127 passed, 1 skipped` at the time (re-pulled to the final commit later: `129 passed, 1 skipped`) → server `/health` ok, `/state` 6 tasks, `/` 200 text/html, seed idempotent. |
+| 3 — repo readiness | **PASS** | `LICENSE` (MIT, copyright **Instantiated Coders** — filled in the cleanup pass), `.gitignore` now ignores `.env`/`*.db*`/`.venv*`/`__pycache__`, `git ls-files` shows only `.env.example`, secret scan over tree + **all commits** → 0 matches, stray files listed (nothing deleted), README rewritten from commands actually run, fresh clone in `$TEMP/campuspilot-proof` → venv → install → `127 passed, 1 skipped` at the time (re-pulled to the final commit later: `129 passed, 1 skipped`) → server `/health` ok, `/state` 6 tasks, `/` 200 text/html, seed idempotent. |
 | 4 — tests | **PASS** | Baseline **138 passed**; two real failures fixed, both minimal (`streamlit` collection crash on a clean install via `pytest.importorskip`; Friday/Sunday-only seed horizon bug that dropped a deadline from the 7-day plan); 2 new tests added (limit 3); final **140 passed** offline on Python 3.11.15, and **129 passed, 1 skipped** in the fresh clone on Python 3.14. |
 | 5 — submission aids | **PASS** (docs) / **UNVERIFIED** (reset scripts not run) | `docs/demo_script.md` (2:40), `docs/devpost_draft.md` (no invented claims), `scripts/reset_demo.ps1` + `.sh` created — **syntax-checked only** (`bash -n` OK; PowerShell parser 0 errors) and deliberately **not executed**, per "ask before running". |
 
@@ -491,3 +491,25 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   `<LIVE_URL>`, and Render's ~1 minute cold start is documented, not measured.
 - The image was built and run on Docker Desktop (Windows); no `linux/arm64`
   build or GPU/host-specific runtime was tested.
+
+---
+
+## Cleanup pass (after the deploy pass)
+
+- **`requirements-agent.txt` removed:** every line was already in
+  `requirements.txt` with a tighter pin; it added nothing.
+- **`requirements-manual.txt` removed:** it only added `streamlit==1.66.0`,
+  which now lives in **`requirements-dev.txt`**
+  (`-r requirements.txt` + `pytest==9.1.1` + `httpx==0.28.1` +
+  `streamlit==1.66.0`). No version pin changed.
+- **`requirements.txt` is now runtime only** (`fastapi`, `uvicorn`,
+  `pydantic`, `python-dotenv`, `google-genai`, `httpx`, `tzdata`); `httpx` is
+  runtime because `agent/llm_client.py` imports it.
+- **This report moved** from the repo root to `docs/FIX_REPORT.md`; the README
+  link was updated and `.dockerignore` no longer names it (it already ignores
+  `*.md`).
+- **LICENSE copyright filled in:** `Instantiated Coders`.
+- `backend/tests/test_manual_app.py` skip reason now points at
+  `requirements-dev.txt`.
+- References to the old requirement files earlier in this document are
+  historical and intentionally left as written.

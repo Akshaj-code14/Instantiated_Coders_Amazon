@@ -14,13 +14,12 @@ from pathlib import Path
 
 import pytest
 
-# FIX: `requirements.txt` keeps Streamlit optional (see the commented line
-# there), so a clean clone cannot import agent.manual_app. Skip this file's
-# harness tests instead of crashing pytest collection; they still run on an
-# install made from requirements-manual.txt.
+# FIX: Streamlit is an optional extra in `requirements-dev.txt`, so a runtime-
+# only clone cannot import agent.manual_app. Skip this file's harness tests
+# instead of crashing pytest collection; they still run on a dev install.
 pytest.importorskip(
     "streamlit",
-    reason="Streamlit harness extra not installed (requirements-manual.txt)",
+    reason="Streamlit harness extra not installed (requirements-dev.txt)",
 )
 
 from agent.controller import CampusPilotAgent

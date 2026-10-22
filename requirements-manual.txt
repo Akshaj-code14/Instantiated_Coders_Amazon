@@ -1,8 +1,0 @@
-# Manual test harness (Person 1) — local only.
-# Verified on Python 3.11 and 3.12. Streamlit 1.66 requires Python >= 3.11.
-streamlit==1.66.0
-google-genai==2.31.0
-pydantic==2.14.1
-python-dotenv==1.2.4
-tzdata==2026.5
-pytest==9.1.1

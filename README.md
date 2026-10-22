@@ -166,17 +166,18 @@ curl http://127.0.0.1:8000/state      # profile, tasks, timeline, plans, conflic
 ## Tests
 
 ```bash
+pip install -r requirements-dev.txt  # runtime + pytest, httpx, Streamlit harness
 python -m pytest -q                  # from the repo root
 ```
 
 The suite (backend contract, API, agent guardrails, seed, e2e, manual harness)
 runs entirely offline against a throwaway SQLite file — it never calls the LLM.
 
-- Full dev install (`requirements.txt` + `requirements-manual.txt`, Python
-  **3.11**): **156 passed** (140 before the deploy work + 16 deploy tests).
-- Fresh clone with `requirements.txt` only (Python **3.14**):  **145 passed,
-  1 skipped** (129 + the 16 deploy tests); the Streamlit manual harness is an
-  optional extra, so its file skips instead of breaking collection.
+- Full dev install (`requirements-dev.txt`, Python **3.11**): **156 passed**
+  (140 before the deploy work + 16 deploy tests).
+- Runtime only (`requirements.txt`, Python **3.14**): **145 passed, 1 skipped**
+  (129 + the 16 deploy tests); the Streamlit manual harness is an optional
+  extra, so its file skips instead of breaking collection.
 
 Both runs were executed from a fresh `git clone` in a clean virtualenv.
 
@@ -210,9 +211,7 @@ Timed walkthrough: `docs/demo_script.md`. Repeatable reset:
 
 ## License
 
-MIT — see `LICENSE`. **The copyright line is a placeholder
-(`<TEAM NAME - I WILL CONFIRM>`): the team must approve the final name before
-submission.**
+MIT — see [`LICENSE`](LICENSE). Copyright (c) 2026 **Instantiated Coders**.
 
 ## Team
 
@@ -222,4 +221,5 @@ submission.**
 | TEAM TO FILL | TEAM TO FILL | TEAM TO FILL |
 | TEAM TO FILL | TEAM TO FILL | TEAM TO FILL |
 
-Change log for the code-freeze pass lives in `FIX_REPORT.md`.
+Change log for the code-freeze and deploy passes lives in
+[`docs/FIX_REPORT.md`](docs/FIX_REPORT.md).

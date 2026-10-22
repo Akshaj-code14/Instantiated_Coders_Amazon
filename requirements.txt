@@ -1,5 +1,6 @@
-# CampusPilot — integrated app (agent + backend + UI served by FastAPI)
-# Python 3.11+ (Streamlit harness and the merged tree are verified on 3.11/3.12).
+# CampusPilot — runtime dependencies only (agent + backend + UI in one process).
+# Python 3.11+. For tests and the optional Streamlit harness use
+# requirements-dev.txt (it installs this file first).
 
 # Web server / API layer
 fastapi==0.157.0
@@ -9,11 +10,5 @@ uvicorn==0.54.0
 pydantic==2.14.1
 python-dotenv==1.2.4
 google-genai==2.31.0
+httpx==0.28.1           # llm_client catches httpx transport errors at runtime
 tzdata==2026.5          # zoneinfo("Asia/Kolkata") on Windows
-
-# dev / test
-pytest==9.1.1
-httpx==0.28.1           # fastapi.testclient transport
-
-# Optional: Streamlit manual harness (person-1 only, not needed to run the app)
-# streamlit==1.66.0

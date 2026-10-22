@@ -1,0 +1,9 @@
+# CampusPilot — development dependencies (tests + optional manual harness).
+#   pip install -r requirements-dev.txt
+# Same pins as before; requirements.txt is the runtime set.
+
+-r requirements.txt
+
+pytest==9.1.1
+httpx==0.28.1           # also runtime (see requirements.txt); kept explicit here
+streamlit==1.66.0       # optional manual harness (backend/agent/manual_app.py)

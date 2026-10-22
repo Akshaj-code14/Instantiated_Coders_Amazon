@@ -118,8 +118,8 @@ Answer these only from your own runs. If something was not tested, write
 
 ## License
 
-MIT — `LICENSE` at the repo root. **TEAM TO FILL: approve the copyright line
-(`<TEAM NAME - I WILL CONFIRM>`) before submitting.**
+MIT — `LICENSE` at the repo root, copyright **Instantiated Coders**. If the
+team competes under a different legal name, say so here before submitting.
 
 ## Team
 
