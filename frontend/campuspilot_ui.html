@@ -1334,6 +1334,8 @@
                 <h3 class="text-sm font-bold text-white flex items-center gap-2">
                   CampusPilot Agent
                   <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <!-- FIX: visible label whenever the LLM is unavailable (no key or LLM error) so the UI never implies live AI. -->
+                  <span id="fallbackBadge" class="hidden px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40" title="No GEMINI_API_KEY or the LLM failed; replies come from the deterministic quick-mode router.">Fallback mode · quick reply</span>
                 </h3>
                 <p class="text-[11px] text-slate-400">Autonomous calendar conflict resolver &amp; schedule optimizer</p>
               </div>
@@ -1918,12 +1920,18 @@
     const USE_MOCK = false;
 
     async function callApi(path, body) {
-      const res = await fetch(API_BASE + path, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      let res;
+      try {
+        res = await fetch(API_BASE + path, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } catch (err) {
+        // FIX: friendly message instead of the browser's bare "Failed to fetch".
+        throw new Error('Cannot reach the CampusPilot server. Start it (uvicorn server:app --port 8000) and try again.');
+      }
       let payload = {};
       try { payload = await res.json(); } catch (err) { payload = {}; }
       if (!res.ok) {
@@ -2235,6 +2243,9 @@
       lucide.createIcons();
     }
 
+    /* FIX: latched when a chat turn reports used_fallback (e.g. live key failed). */
+    let chatUsedFallback = false;
+
     async function sendMessage(text, isRetry) {
       text = (text || '').trim();
       /* FIX: the wake phrase is a UI wrapper, never part of the agent prompt. */
@@ -2251,6 +2262,14 @@
         const data = await api.chat(text, languageSelect.value);
         agentThinkingBox.classList.add('hidden');
         addAgentBubble(data);
+        /* FIX: a live key that fails mid-demo must also flip the badge, not just
+           the offline-on-start case handled in renderProfile. */
+        chatUsedFallback = Boolean(data.used_fallback);
+        const fallbackBadgeNow = document.getElementById('fallbackBadge');
+        if (fallbackBadgeNow) {
+          const serverOffline = typeof latestState !== 'undefined' && latestState && latestState.llm !== 'live';
+          fallbackBadgeNow.classList.toggle('hidden', !(data.used_fallback || serverOffline));
+        }
         speak(data.reply || '');
         if (data.saved_plan_id) {
           currentProposal = null;
@@ -2533,6 +2552,12 @@
       document.getElementById('dateLabel').textContent = state.date_label || 'Today';
       document.getElementById('modelLabel').textContent =
         state.llm === 'live' ? 'Gemini (live)' : 'Rule-based quick mode';
+      /* FIX: keep the fallback badge in sync with the server's llm status, and
+         latch it on after a chat turn that fell back (live key that failed). */
+      const fallbackBadge = document.getElementById('fallbackBadge');
+      if (fallbackBadge) {
+        fallbackBadge.classList.toggle('hidden', state.llm === 'live' && !chatUsedFallback);
+      }
       document.getElementById('syncBadge').textContent =
         state.active_plan ? 'Active plan synced' : 'No active plan';
       document.getElementById('badgeTasksCount').textContent = pendingTasks.length;
@@ -2784,6 +2809,23 @@
     document.getElementById('timelineBranchContainer').addEventListener('click', (e) => {
       if (e.target.closest('.proposal-review-btn')) openProposal();
     });
+
+    /* FIX: the hard-coded task cards, deadline cards, timeline nodes, sample
+       chat bubbles and diff rows in the markup are loading placeholders only.
+       Clear them before the first /state read so sample content is never shown
+       as if it came from the server (they are replaced by renderTasks,/
+       renderTimeline, renderDeadlines, renderWelcome, renderDiff). */
+    ['taskListContainer', 'deadlineItems', 'timelineBranchContainer', 'diffList']
+      .forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+      });
+    /* FIX part 2: keep #agentThinkingBox — bubbles are inserted before it. */
+    if (chatMessageLog) {
+      Array.from(chatMessageLog.children).forEach((child) => {
+        if (child !== agentThinkingBox) child.remove();
+      });
+    }
 
     loadState().catch(err => {
       showToast(err.message || 'Could not reach the CampusPilot server.', 'err');
