@@ -80,9 +80,65 @@ cp .env.example .env
 | `GEMINI_MODEL` | Model id when a key is set. | `gemini-2.5-flash` |
 | `CAMPUSPILOT_DB` | SQLite file path. | `data/campuspilot.db` next to `backend/` |
 | `DEMO_STUDENT_ID` | Seeded student used by the demo session. | `student_demo` |
-| `PORT` | Only used if you pass it to your own launcher. | `8000` |
+| `LIVE_CALLS_PER_DAY` | Real Gemini requests allowed per day (all visitors). | `15` |
+| `LIVE_CALLS_PER_IP_PER_HOUR` | Real Gemini requests allowed per visitor per hour. | `5` |
+| `DEMO_PASSWORD` | Optional password gate for a public deployment. | **Unset = open demo** (no gate) |
+| `PORT` | Port the server binds when launched by a host. | `8000` |
 
 `.env.example` contains placeholders only. `.env` and `*.db*` are git-ignored.
+
+## Live demo
+
+**URL:** `<LIVE_URL>` — TEAM TO FILL once the host gives you one.
+
+The live instance runs the same code in quick mode unless a key is configured.
+It is a **shared single demo student**: every visitor sees and edits the same
+plans, so use the **Reset demo** link in the header (or `POST /demo/reset`,
+max 3 per hour per IP) to put the seeded data back.
+
+Expect the **first load to take ~1 minute**: free hosts sleep idle services and
+the container has to boot, install nothing (deps are baked in) and seed SQLite.
+Live AI is **rate-limited** (`LIVE_CALLS_PER_DAY=15`, 5 per visitor per hour);
+when a cap is hit the app answers from quick mode with the usual fallback badge
+and the line *"Live AI limit reached; using fallback mode."* — never an error.
+
+### Deploy (Render, free Docker web service)
+
+1. Push this branch to your own GitHub repo (the blueprint needs a repo URL).
+2. Render → **New → Blueprint**, pick the repo. `render.yaml` creates a free
+   Docker web service using `Dockerfile`, health check `/health`.
+3. In **Environment / Secrets**, set `GEMINI_API_KEY` (your key, pasted by you —
+   never committed) and optionally `DEMO_PASSWORD`. `GEMINI_MODEL`,
+   `LIVE_CALLS_PER_DAY` and `LIVE_CALLS_PER_IP_PER_HOUR` already have defaults.
+4. Deploy. Render injects `PORT`; the image binds `0.0.0.0:$PORT`.
+5. Open `https://<service>.onrender.com/`, check `/health` says
+   `"llm": "live"` (or `"offline"` if you left the key out), then run the
+   plan → confirm journey.
+
+Railway: **New Project → Deploy from repo**, it detects the `Dockerfile`; set
+the same env vars in *Variables* and generate a public domain.
+
+Hugging Face Spaces: create a **Docker** Space, upload this repo (the Space's
+`README.md` needs its YAML header), and set the same variables under
+*Settings → Variables and secrets*. The container listens on `PORT` (Spaces
+sets `7860`), so the Space URL works unchanged.
+
+Free hosts give you an **ephemeral disk**: a restart can lose the SQLite file.
+That is fine — startup recreates and reseeds it (`backend/integration/wiring.py
+:startup`) — but saved plans do not survive a host restart, only a process
+restart inside the same container.
+
+### Run the container locally
+
+```bash
+docker build -t campuspilot .
+docker run --rm -p 8000:8000 -e PORT=8000 campuspilot
+# with a key (never commit it):
+docker run --rm -p 8000:8000 -e PORT=8000 -e GEMINI_API_KEY="$GEMINI_API_KEY" campuspilot
+```
+
+`.dockerignore` keeps `.env`, `*.db*`, `.venv*`, `.git` and `__pycache__` out
+of the image.
 
 ## Run
 
@@ -103,7 +159,7 @@ python -m services.seed_data
 Health check (this is what the demo script uses):
 
 ```bash
-curl http://127.0.0.1:8000/health     # {"status":"ok","llm":"offline","db":"ok"}
+curl http://127.0.0.1:8000/health     # {"status":"ok","llm":"offline","db":"ok","live_calls_remaining":15}
 curl http://127.0.0.1:8000/state      # profile, tasks, timeline, plans, conflicts
 ```
 
@@ -117,10 +173,10 @@ The suite (backend contract, API, agent guardrails, seed, e2e, manual harness)
 runs entirely offline against a throwaway SQLite file — it never calls the LLM.
 
 - Full dev install (`requirements.txt` + `requirements-manual.txt`, Python
-  **3.11**): **138 passed**.
-- Fresh clone with `requirements.txt` only (Python **3.14**): **127 passed,
-  1 skipped** — the Streamlit manual harness is an optional extra, so its file
-  skips instead of breaking collection.
+  **3.11**): **155 passed** (140 before the deploy work + 15 deploy tests).
+- Fresh clone with `requirements.txt` only (Python **3.14**): **129 passed,
+  1 skipped** before the deploy work; the Streamlit manual harness is an
+  optional extra, so its file skips instead of breaking collection.
 
 Both runs were executed from a fresh `git clone` in a clean virtualenv.
 
@@ -145,7 +201,12 @@ Timed walkthrough: `docs/demo_script.md`. Repeatable reset:
   then falls back for that turn and says so ("quick mode handled this turn").
 - Speech recognition needs Chrome/Edge and microphone permission; without it the
   UI says so and typing works as normal.
-- Single demo student, no multi-user isolation or authentication.
+- Single demo student, no multi-user isolation: every visitor shares it (use
+  **Reset demo** between judges).
+- Live-AI counters are in process memory, so a restart (or a second worker)
+  starts the daily budget over. Run one worker, as the provided image does.
+- Public deployments throttle `/chat` (10/min per IP, 2000-char messages,
+  ~16 KB bodies); `/health` also answers when a `DEMO_PASSWORD` gate is set.
 
 ## License
 

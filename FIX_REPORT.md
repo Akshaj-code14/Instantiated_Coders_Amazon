@@ -361,3 +361,120 @@ or a model-side change mid-demo. Mitigation that *was* verified: every failed
 turn falls back to quick mode, the UI flips its **Fallback mode · quick reply**
 badge, and the notice text stays friendly. Run the demo with the key removed
 to be deterministic.
+
+---
+
+# Deploy-ready pass — branch `deploy-ready` (off `submission-fixes`)
+
+Goal: let judges open a free-hosted URL without changing app behavior. Every
+edit below is additive and marked `# FIX` / `<!-- FIX -->` in the source.
+Nothing pushed; `main` untouched; no key printed, logged or committed.
+
+## Item 1 — Docker
+
+### `Dockerfile` (new)
+- **Why:** one reproducible image for Render/Railway/HF Spaces.
+- **Before:** no container definition. **After:** `python:3.11-slim`, installs
+  `requirements.txt`, copies only `backend/` + `frontend/`, works from
+  `/app/backend` (the app imports `server`, `agent`, `services`,
+  `integration` as top-level packages) and runs
+  `uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}`.
+
+### `.dockerignore` (new) / `render.yaml` (new)
+- Keep `.env`, `.env.*`, `*.db*`, `.venv*`, `.git`, `__pycache__`, docs and
+  screenshots out of the image; blueprint = free Docker web service with
+  `/health` checks and `GEMINI_API_KEY` / `DEMO_PASSWORD` marked `sync: false`.
+
+## Item 2 — Startup seed
+- **Before:** `startup()` already called `init_db()` + `seed_demo()`, but an
+  empty (0-byte) file — what a fresh volume can look like — was unverified.
+- **After:** proven by `test_empty_database_file_is_seeded_on_startup`
+  (empty file → schema + 6 tasks + profile `Aditya Verma`) and by every
+  container start in this pass. No code change was needed.
+
+## Item 3 — Live-AI budget
+### `backend/agent/live_budget.py` (new)
+- Global daily counter (resets at **IST midnight**, via `agent.config.IST`) and
+  a per-IP hourly counter; `acquire()` charges **every attempt**. Env:
+  `LIVE_CALLS_PER_DAY` (default **15**), `LIVE_CALLS_PER_IP_PER_HOUR`
+  (default **5**). In-process only (one uvicorn worker, documented).
+
+### `backend/agent/llm_client.py`
+- **Before:** every `generate_content` attempt ran regardless of budget.
+  **After:** each attempt calls `budget.acquire(self.client_ip)`; a refusal
+  raises `LiveLimitReached` (a `LLMUnavailableError` subclass) **before** any
+  network call, so the controller takes its existing fallback path.
+  `client_ip` defaults to `"unknown"` and is set per turn by the server.
+
+### `backend/agent/controller.py`, `backend/integration/mappers.py`,
+`backend/integration/wiring.py`, `backend/integration/api_models.py`
+- `set_client_ip()` forwards the visitor IP to the client (no-op for the
+  offline/fake clients). `friendly_notice()` returns exactly
+  **"Live AI limit reached; using fallback mode."** `llm_status()` is now
+  `live | offline | capped`; `HealthResponse`/`StateResponse` allow `capped`
+  and `/health` adds `live_calls_remaining`, never the key.
+
+## Item 4 — Abuse limits
+### `backend/server.py`
+- `deploy_guard` middleware: per-IP client IP (honours `X-Forwarded-For` for
+  free-host proxies), 16 KB body cap (`413`), optional `DEMO_PASSWORD` gate
+  (`401` + tiny login page, cookie holds a SHA-256 hash, `/health` exempt,
+  20 wrong tries/min per IP), plus the existing same-origin `403`.
+- `/chat`: 10 requests/min/IP (`429` friendly JSON); message length is the
+  existing `ChatRequest` 2000-char limit (`422` friendly).
+
+## Item 5 — Demo reset
+### `backend/integration/wiring.py` + `backend/server.py`
+- `reset_demo_data()` deletes the demo student's plans/plan_items/check-ins/
+  tasks/deadlines/events/preferences/tool logs and the seeded (`student_id
+  NULL`) notices, then reseeds — relative to *today*.
+- `POST /demo/reset`: 3/hour/IP (`429`), clears every session so no browser
+  keeps a stale pending plan.
+### `frontend/campuspilot_ui.html`
+- One new header button `#resetDemoBtn` ("Reset demo"); all existing element
+  IDs untouched. README documents that all visitors share one demo student.
+
+## Item 6 — Headers / security
+- `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  strict-origin-when-cross-origin`, `X-Frame-Options: DENY`,
+  `Cross-Origin-Resource-Policy: same-origin`, `Permissions-Policy:
+  microphone=(self)` (the Alexa+ simulation needs the mic).
+- No `Access-Control-Allow-*` header is emitted (same-origin only); unknown
+  errors keep the existing generic 500 JSON with no traceback or path.
+
+## Item 7 — Tests
+- `backend/tests/test_deploy_limits.py` (new, 15 tests, all offline with a fake
+  Gemini SDK): defaults 15/5; proxy-header IP parsing; retries counted; per-IP separate from global; no
+  key → offline; cap → fallback + exact label + `capped` in `/health`; key
+  never in `/health` or `/state`; `/chat` 10/min; 2000-char and 16 KB limits;
+  security headers + foreign-origin 403; password gate; empty-DB seed; reset
+  reseeds and is rate-limited; plan → confirm → restart survives.
+- `backend/tests/conftest.py`: autouse reset of the process-global counters and
+  generous default caps for the pre-existing LLM unit tests (they make a dozen
+  fake calls per test); cap tests set their own values.
+- `backend/tests/test_api.py`: `/health` assertion updated for the new
+  `live_calls_remaining` field (the three original fields are still asserted).
+- **Suite:** `python -m pytest -q` → **155 passed** (was 140).
+
+## Item 8 — Verification (run)
+- `docker build -t campuspilot:deploy-test .` → success (Docker Desktop
+  daemon started for this pass).
+- Container, key unset: `/health` = `{"status":"ok","llm":"offline","db":"ok",
+  "live_calls_remaining":15}`, `GET /` 200 HTML (288,671 bytes), plan → save →
+  `docker restart` → same `plan_id`, cancel keeps it, replan proposal ok —
+  **22/22** script checks.
+- Container, dummy key + `LIVE_CALLS_PER_DAY=2`: turn 1 and 2 used the live
+  attempt (auth failure → quick mode), turn 3 returned
+  `Live AI limit reached; using fallback mode.`, `/health` → `"llm":"capped"`,
+  `live_calls_remaining: 0`. Dummy key string appears **0** times in
+  `docker logs` and **0** times in `/state`.
+- Container, `DEMO_PASSWORD=letmein`: `/health` 200, `/` 401, `/?demo_password=`
+  200, `/state` 401 without the cookie.
+- `/demo/reset` in the container: 200, 200, 200, then 429; `/state` back to 6
+  tasks, no active/pending plan.
+
+## What could not be verified here
+- A real cloud deployment (no host account, no push): the URL is still
+  `<LIVE_URL>`, and Render's ~1 minute cold start is documented, not measured.
+- The image was built and run on Docker Desktop (Windows); no `linux/arm64`
+  build or GPU/host-specific runtime was tested.
