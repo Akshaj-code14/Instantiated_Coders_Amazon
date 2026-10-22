@@ -443,7 +443,7 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   errors keep the existing generic 500 JSON with no traceback or path.
 
 ## Item 7 — Tests
-- `backend/tests/test_deploy_limits.py` (new, 15 tests, all offline with a fake
+- `backend/tests/test_deploy_limits.py` (new, 16 tests, all offline with a fake
   Gemini SDK): defaults 15/5; proxy-header IP parsing; retries counted; per-IP separate from global; no
   key → offline; cap → fallback + exact label + `capped` in `/health`; key
   never in `/health` or `/state`; `/chat` 10/min; 2000-char and 16 KB limits;
@@ -454,7 +454,7 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   fake calls per test); cap tests set their own values.
 - `backend/tests/test_api.py`: `/health` assertion updated for the new
   `live_calls_remaining` field (the three original fields are still asserted).
-- **Suite:** `python -m pytest -q` → **155 passed** (was 140).
+- **Suite:** `python -m pytest -q` → **156 passed** (was 140).
 
 ## Item 8 — Verification (run)
 - `docker build -t campuspilot:deploy-test .` → success (Docker Desktop
@@ -479,7 +479,7 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   `openNewPlanBtn`) is still present and the only console message is the
   pre-existing Tailwind CDN warning.
 - Fresh clone of this branch (`requirements.txt` only, Python 3.14 venv):
-  **144 passed, 1 skipped**, and the server started exactly as the container
+  **145 passed, 1 skipped**, and the server started exactly as the container
   does (`uvicorn server:app --host 0.0.0.0 --port $PORT`, key unset) served
   `/health` (offline, 15 left), `GET /` 200 HTML and a seeded 6-task `/state`.
 - Commits on `deploy-ready`: `8296545`, `79a6b1c`, `35a9196`, `a583893`.

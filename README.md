@@ -173,9 +173,9 @@ The suite (backend contract, API, agent guardrails, seed, e2e, manual harness)
 runs entirely offline against a throwaway SQLite file — it never calls the LLM.
 
 - Full dev install (`requirements.txt` + `requirements-manual.txt`, Python
-  **3.11**): **155 passed** (140 before the deploy work + 15 deploy tests).
-- Fresh clone with `requirements.txt` only (Python **3.14**): **144 passed,
-  1 skipped** (129 + the 15 deploy tests); the Streamlit manual harness is an
+  **3.11**): **156 passed** (140 before the deploy work + 16 deploy tests).
+- Fresh clone with `requirements.txt` only (Python **3.14**):  **145 passed,
+  1 skipped** (129 + the 16 deploy tests); the Streamlit manual harness is an
   optional extra, so its file skips instead of breaking collection.
 
 Both runs were executed from a fresh `git clone` in a clean virtualenv.

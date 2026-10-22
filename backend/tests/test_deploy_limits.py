@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agent.config import AgentConfig
-from agent.live_budget import budget, client_ip_from_headers
+from agent.live_budget import budget, client_ip_from_headers  # noqa: F401
 from agent.llm_client import GeminiLLMClient, LiveLimitReached
 
 
@@ -109,6 +109,24 @@ def test_daily_cap_counts_every_request_including_retries(monkeypatch):
     with pytest.raises(LiveLimitReached):
         _generate(second)
     assert sdk_second.models.calls == 0, "a capped turn must not hit Gemini"
+
+
+def test_daily_counter_rolls_over_at_ist_midnight(monkeypatch):
+    from datetime import datetime, timedelta
+
+    from agent.config import IST
+    import agent.live_budget as live_budget
+
+    monkeypatch.setenv("LIVE_CALLS_PER_DAY", "2")
+    monkeypatch.setenv("LIVE_CALLS_PER_IP_PER_HOUR", "100")
+
+    day = datetime(2026, 10, 23, 23, 0, tzinfo=IST)
+    monkeypatch.setattr(live_budget, "now_ist", lambda: day)
+    assert live_budget.budget.acquire("visitor") is None
+    assert live_budget.budget.remaining() == 1
+
+    monkeypatch.setattr(live_budget, "now_ist", lambda: day + timedelta(hours=2))
+    assert live_budget.budget.remaining() == 2, "a new IST day starts fresh"
 
 
 def test_per_ip_hourly_cap_is_separate_from_the_global_one(monkeypatch):
