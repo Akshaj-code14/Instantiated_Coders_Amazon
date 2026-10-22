@@ -213,3 +213,42 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
   existed (`test_save_is_server_side_and_guarded` asserts `409`), so no third
   test was needed.
 - **Suite after item 4:** `python -m pytest -q` → **140 passed**.
+
+---
+
+## Item 5 — SUBMISSION AIDS (docs only)
+
+### `docs/demo_script.md` (new)
+- **Why:** a repeatable, timed demo under the 2:45 hard stop.
+- **Before:** did not exist. **After:** 160 s (2:40) script — hook 15 s,
+  Alexa+ simulated + track statement 20 s, `Alexa, ask CampusPilot to plan my
+  next two days` 40 s, conflict + **Confirm and Save** 35 s,
+  `I lost two hours today` diff + **Cancel** 25 s, refresh showing
+  *Active plan synced* 15 s, close 10 s — with exact prompts and click targets.
+- Every quoted UI string was checked against the shipped files (tab is
+  `AI Chat & Co-Pilot`, chip is `Found free time (1 conflict)`, modal is
+  `Review Proposed Plan Changes`, success is `New Plan Activated!`, reply is
+  `Nothing is saved yet — press Confirm to save this plan.`).
+
+### `scripts/reset_demo.ps1` + `scripts/reset_demo.sh` (new)
+- **Why:** the demo must be repeatable between judges.
+- **Before:** did not exist. **After:** delete **only**
+  `backend/data/campuspilot.db` (+ `-wal`, `-shm`) and reseed with
+  `python -m services.seed_data`; both scripts say to stop the server first
+  and touch nothing else (no code, no `.env`, no git).
+- **Not executed — by design:** the brief says ask before running, so they are
+  **UNVERIFIED as runs**. Verified instead:
+  `bash -n scripts/reset_demo.sh` → syntax OK; Windows PowerShell parser
+  (`[System.Management.Automation.Language.Parser]::ParseInput`) on
+  `reset_demo.ps1` → **0 errors**.
+
+### `docs/devpost_draft.md` (new)
+- **Why:** submission text without invented claims.
+- **Before:** did not exist. **After:** project description, problem, how it
+  works, honest Alexa+ simulated track statement (what it is *not*), honest
+  limitations, and a **Product Feedback** skeleton for Gemini / FastAPI /
+  SQLite / Web Speech API where every entry is a
+  **"TEAM TO FILL: what actually happened"** prompt. No experiences, numbers
+  or metrics were invented; screenshots/media are marked TEAM TO FILL.
+
+**Suite after item 5 (docs only):** `python -m pytest -q` → **140 passed**.
