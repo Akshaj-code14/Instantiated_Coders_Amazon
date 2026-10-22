@@ -231,7 +231,31 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
   re-seeded to `today+3` (quiz, 14:00) / `today+5` (Java, 23:59) so every seeded
   deadline is always inside the window the agent actually reads. Seed-only
   change, 4 added lines + comment, no test weakened, no assertion changed.
-- **Ran after the fix:** `python -m pytest -q` → **140 passed**;
+- **Ran after the fix:** `python -m pytest -q` → **140 passed**; a freshly seeded
+  DB (`CAMPUSPILOT_DB=$TEMP/cp_seedcheck/friday.db`) now returns **5** rows from
+  `get_upcoming_deadlines(days_ahead=7)` (DBMS 24 Oct 11:00, Discrete Math
+  24 Oct 18:00, OS 25 Oct 23:59, Java 25 Oct 23:59, Networks Quiz 26 Oct 14:00).
+- **Also re-ran after the fix (session re-verification, same day):**
+  - live HTTP on a fresh offline DB (`127.0.0.1:8013`): 6 seeded tasks, proposal
+    → **0** active plans, confirm → **1** active plan and the same `plan_id`,
+    second confirm → **409** with still **1** row, `plan_id` of a *different*
+    proposal → **400** (`{"error":"That proposal is no longer the pending
+    plan."}`), saving when nothing is pending → **409**, cancel → **200** and the
+    active `plan_id` is unchanged, "I lost two hours" → replan proposal with the
+    active plan still untouched, `/health` = `{"status":"ok","llm":"offline",
+    "db":"ok"}`; after killing and restarting the server, `/state.active_plan`
+    is the *same* `plan_id` with its 2 blocks and `pending_plan: null`.
+    One line of my own check script was wrong, not the app: it expected `400`
+    when saving a foreign `plan_id` while **nothing** was pending — the server
+    correctly answers `409` there, so 23/24 of my own assertions passed and the
+    odd one was re-checked by hand (result above).
+  - fresh clone re-pulled to the final commit (`$TEMP/campuspilot-proof`, Python
+    **3.14** venv from `requirements.txt` only): `129 passed, 1 skipped` — the
+    skip is `test_manual_app.py` (11 tests, the optional Streamlit harness in
+    `requirements-manual.txt`), i.e. 129 + 11 = the 140 seen in the dev venv;
+    nothing else is silently missing. Offline server from the clone: `/health`
+    ok, `/state` profile *Aditya Verma* + 6 tasks + 4 timeline + 1 conflict,
+    `GET /` → `200 text/html`.
 
 ---
 
@@ -279,9 +303,9 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
 | Item | Status | Evidence |
 | --- | --- | --- |
 | 1 — Alexa+ simulated track | **PASS** | Live browser run: toggle → placeholder/status change; typed `Alexa, ask CampusPilot to plan my next two days` and intercepted the fetch body → `{"message":"plan my next two days"}` (wake stripped before display *and* before `/chat`); reply card rendered, `speechSynthesis.speaking === true`; ring computed style `alexaRingPulse 1.35s`; disclaimer string present. Source + `docs/alexa_simulation.md`; unit test `test_alexa_wake.py`. |
-| 2 — real path | **PASS** | `USE_MOCK = false`, `API_BASE = window.location.origin`; HTTP script **11/11 PASS** (0 saved → confirm 1 active → second confirm `409` → cancel keeps same `plan_id` → unknown-plan save `409` → no traceback); server restart returns the same active plan; browser refresh shows *Active plan synced*; with the server stopped, Confirm shows an error toast and **no** success; fallback badge verified offline **and** on a live-key-that-fails server (`used_fallback: true`, friendly notice); sample strings absent from the DOM after load. |
-| 3 — repo readiness | **PASS** (team must approve the LICENSE line) | `LICENSE` (MIT, `<TEAM NAME - I WILL CONFIRM>`), `.gitignore` now ignores `.env`/`*.db*`/`.venv*`/`__pycache__`, `git ls-files` shows only `.env.example`, secret scan over tree + **all commits** → 0 matches, stray files listed (nothing deleted), README rewritten from commands actually run, fresh clone in `$TEMP/campuspilot-proof` → venv → install → `127 passed, 1 skipped` → server `/health` ok, `/state` 6 tasks, `/` 200 text/html, seed idempotent. |
-| 4 — tests | **PASS** | Baseline **138 passed**; one real failure fixed (`streamlit` collection crash on a clean install via `pytest.importorskip`); 2 new tests added (limit 3); final **140 passed** offline on Python 3.11.15. |
+| 2 — real path | **PASS** | `USE_MOCK = false`, `API_BASE = window.location.origin`; HTTP on a fresh offline DB: proposal → **0** saved, confirm → **1** active, second confirm → `409` (still 1), saving a *different* proposal's id → `400`, saving with nothing pending → `409`, cancel → active `plan_id` unchanged, restart → same `plan_id` + `pending_plan: null`; browser refresh shows *Active plan synced*; with the server stopped, Confirm shows an error toast and **no** success; fallback badge verified offline **and** on a live-key-that-fails server (`used_fallback: true`, friendly notice); the hard-coded cards/diff rows in the markup are cleared on load, so no sample string reaches the DOM. |
+| 3 — repo readiness | **PASS** (team must approve the LICENSE line) | `LICENSE` (MIT, `<TEAM NAME - I WILL CONFIRM>`), `.gitignore` now ignores `.env`/`*.db*`/`.venv*`/`__pycache__`, `git ls-files` shows only `.env.example`, secret scan over tree + **all commits** → 0 matches, stray files listed (nothing deleted), README rewritten from commands actually run, fresh clone in `$TEMP/campuspilot-proof` → venv → install → `127 passed, 1 skipped` at the time (re-pulled to the final commit later: `129 passed, 1 skipped`) → server `/health` ok, `/state` 6 tasks, `/` 200 text/html, seed idempotent. |
+| 4 — tests | **PASS** | Baseline **138 passed**; two real failures fixed, both minimal (`streamlit` collection crash on a clean install via `pytest.importorskip`; Friday/Sunday-only seed horizon bug that dropped a deadline from the 7-day plan); 2 new tests added (limit 3); final **140 passed** offline on Python 3.11.15, and **129 passed, 1 skipped** in the fresh clone on Python 3.14. |
 | 5 — submission aids | **PASS** (docs) / **UNVERIFIED** (reset scripts not run) | `docs/demo_script.md` (2:40), `docs/devpost_draft.md` (no invented claims), `scripts/reset_demo.ps1` + `.sh` created — **syntax-checked only** (`bash -n` OK; PowerShell parser 0 errors) and deliberately **not executed**, per "ask before running". |
 
 ### Exact commands run
@@ -312,6 +336,16 @@ cp .env.example .env
 cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8000
 curl http://127.0.0.1:8000/health && curl http://127.0.0.1:8000/state
 ../.venv/Scripts/python.exe -m services.seed_data    # idempotent
+
+# re-verification after the 2026-10-23 Friday seed fix
+./.venv311/Scripts/python.exe -m pytest -q          # 140 passed
+cd backend && CAMPUSPILOT_DB="$TEMP/cp_seedcheck/friday.db" ../.venv311/Scripts/python.exe -c "..."  # 5 deadlines
+# live HTTP check (my script, $TEMP/cp_freeze/http_check.py) against port 8013
+#   + kill/restart of the same server, then GET /state
+cd "$TEMP/campuspilot-proof" && git fetch origin && git reset --hard origin/submission-fixes
+./.venv/Scripts/python.exe -m pytest -q             # 129 passed, 1 skipped (Py 3.14)
+cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8014
+curl http://127.0.0.1:8014/health && curl http://127.0.0.1:8014/state && curl -o /dev/null -w '%{http_code}' http://127.0.0.1:8014/
 
 # submission aids checks
 bash -n scripts/reset_demo.sh                       # syntax OK (not executed)
