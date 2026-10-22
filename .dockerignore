@@ -1,0 +1,21 @@
+# FIX (deploy-ready, item 1): never ship secrets, databases or local envs.
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+backend/data/*.db*
+.venv
+.venv*
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache
+.freebuff
+screenshot-*.png
+docs
+tests
+FIX_REPORT.md
+*.md

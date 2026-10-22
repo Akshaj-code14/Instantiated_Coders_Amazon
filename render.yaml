@@ -1,0 +1,24 @@
+# FIX (deploy-ready, item 1): Render blueprint for the free Docker web service.
+# Deploy: push this repo, then in Render choose "New > Blueprint" (or create a
+# Docker web service by hand with the same settings).
+services:
+  - type: web
+    name: campuspilot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      # Set the value in Render's Secrets UI; never commit it.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: LIVE_CALLS_PER_DAY
+        value: "15"
+      - key: LIVE_CALLS_PER_IP_PER_HOUR
+        value: "5"
+      # Optional password gate; leave unset for an open demo.
+      - key: DEMO_PASSWORD
+        sync: false
