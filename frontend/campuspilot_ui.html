@@ -656,6 +656,143 @@
     border-radius:12px;
   }
 </style>
+<style>
+  /* ============================================================
+     UNIFIED POMODORO — shared status surfaces (window, header pill,
+     sidebar row, radial dot) and the countdown display fixes.
+     ============================================================ */
+  .cp-digits{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  .cp-colon{display:flex;align-items:center;justify-content:center;height:1em;line-height:1;opacity:.75}
+  .cp-ring-fg{transition:stroke-dashoffset .35s linear}
+  .cp-pomo-task{max-width:124px}
+  .cp-pomo-head{gap:7px}
+  .cp-pomo-mini{display:none;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:rgb(var(--cp-grid));padding:1px 6px;border-radius:7px;background:rgb(var(--cp-glow) / .16)}
+  #focusLengthRange:focus-visible{outline:2px solid rgb(var(--cp-glow));outline-offset:3px}
+  .toast-action:focus-visible{outline:2px solid rgba(255,255,255,.75);outline-offset:2px}
+  html.light .toast-action:focus-visible{outline-color:rgba(25,25,25,.65)}
+  .cp-modes button[aria-pressed="true"]{
+    background:rgb(var(--cp-glow) / .2); color:rgb(var(--cp-grid));
+    box-shadow:inset 0 0 0 1px rgb(var(--cp-glow) / .55); opacity:1;
+  }
+  .cp-modes button:hover{opacity:.9}
+  .cp-btn-main{
+    background:linear-gradient(135deg, rgb(var(--cp-glow) / .98), rgb(var(--cp-glow) / .72));
+    color:#fff; opacity:1; cursor:pointer;
+    box-shadow:0 6px 18px rgb(var(--cp-glow) / .38), inset 0 1px 0 rgba(255,255,255,.25);
+    transition:filter .15s ease, transform .15s ease;
+  }
+  .cp-btn-main:hover{filter:brightness(1.12); transform:translateY(-1px)}
+  .cp-btn-main:active{transform:scale(.97)}
+  .cp-pomo-hint{display:none;margin-top:8px;text-align:center;font-size:10px;line-height:1.4;color:rgb(var(--cp-grid));opacity:.85}
+  .cp-pomo-hint.cp-show{display:block}
+
+  /* Header pill: visible only when the window is closed and a timer runs. */
+  .cp-pomo-pill{
+    display:none; align-items:center; gap:7px; padding:7px 11px; border-radius:11px;
+    border:1px solid rgb(var(--cp-glow) / .4); background:rgb(var(--cp-glow) / .14);
+    color:inherit; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+    cursor:pointer; transition:background .15s ease;
+  }
+  .cp-pomo-pill.cp-show{display:inline-flex}
+  .cp-pomo-pill:hover{background:rgb(var(--cp-glow) / .26)}
+  .cp-pomo-pill:focus-visible{outline:2px solid rgb(var(--cp-glow));outline-offset:2px}
+  .cp-pomo-dot{width:7px;height:7px;border-radius:9999px;background:rgba(148,163,184,.5);flex:none;display:inline-block}
+  .cp-pomo-dot.cp-live{background:rgb(var(--cp-glow));box-shadow:0 0 0 3px rgb(var(--cp-glow) / .2);animation:cpPomoPulse 1.9s ease-in-out infinite}
+  @keyframes cpPomoPulse{0%,100%{box-shadow:0 0 0 2px rgb(var(--cp-glow) / .2)}50%{box-shadow:0 0 0 5px rgb(var(--cp-glow) / .06)}}
+
+  /* Sidebar live status row and focus-today progress. */
+  #cpPomoStatus{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+    padding:8px 10px; border-radius:12px; border:1px solid rgba(255,255,255,.08);
+    background:rgba(255,255,255,.04); color:inherit; font-size:11px; font-weight:600;
+    cursor:pointer; text-align:left; transition:background .15s ease;
+  }
+  #cpPomoStatus:hover{background:rgba(255,255,255,.09)}
+  #cpPomoStatus:focus-visible{outline:2px solid rgb(var(--cp-glow));outline-offset:2px}
+  #cpPomoStatusMeta{font-size:10px;opacity:.55;font-variant-numeric:tabular-nums}
+  .cp-focus-track{height:4px;border-radius:9999px;background:rgba(148,163,184,.22);overflow:hidden}
+  .cp-focus-fill{height:100%;width:0%;border-radius:9999px;background:linear-gradient(90deg,rgb(var(--cp-glow)),var(--cp-accent-2));transition:width .45s cubic-bezier(.22,1,.36,1)}
+
+  /* Per-task focused chip: display only, the stored estimate is untouched. */
+  .cp-focused-chip{font-size:10px;font-weight:600;color:rgb(var(--cp-grid));opacity:.9;white-space:nowrap}
+  .cp-focused-chip:empty{display:none}
+
+  .toast-action{
+    margin-left:8px; padding:2px 8px; border-radius:7px; border:1px solid rgba(255,255,255,.3);
+    background:rgba(255,255,255,.16); color:#fff; font-size:11px; font-weight:700; cursor:pointer;
+  }
+  .toast-action:hover{background:rgba(255,255,255,.3)}
+
+  .cp-radial-dot{
+    position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:9999px;
+    background:rgb(var(--cp-glow)); box-shadow:0 0 0 2px rgba(15,23,42,.75); display:none;
+  }
+  .cp-radial-item.cp-running .cp-radial-dot{display:block}
+
+  /* ============================================================
+     FALLING LEAVES — a dedicated decorative layer between the page
+     background (z0 canvas) and the app (z10). Transform/opacity only.
+     ============================================================ */
+  #cpLeaves{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1;contain:strict}
+  #cpLeaves[data-on="false"]{display:none}
+  #cpLeaves.cp-paused .cp-leaf-fall,
+  #cpLeaves.cp-paused .cp-leaf-sway{animation-play-state:paused}
+  .cp-leaf-fall{position:absolute;top:-12vh;will-change:transform;animation:cpLeafFall linear infinite}
+  .cp-leaf-sway{display:block;animation:cpLeafSway ease-in-out infinite alternate}
+  .cp-leaf-shape{display:block;color:var(--cp-leaf-color);opacity:var(--cp-leaf-opacity);filter:drop-shadow(0 2px 3px rgba(0,0,0,.12))}
+  .cp-leaf-shape.cp-leaf-soft{filter:blur(1.30px);opacity:calc(var(--cp-leaf-opacity) * .8)}
+  @keyframes cpLeafFall{
+    0%{transform:translate3d(0,-12vh,0) rotate(0deg)}
+    100%{transform:translate3d(var(--cp-leaf-drift),114vh,0) rotate(var(--cp-leaf-spin))}
+  }
+  @keyframes cpLeafSway{
+    0%{transform:translateX(calc(var(--cp-leaf-sway) * -1)) rotate(-8deg)}
+    100%{transform:translateX(var(--cp-leaf-sway)) rotate(9deg)}
+  }
+  html.cp-reduced-motion #cpLeaves .cp-leaf-fall{animation:none;top:var(--cp-leaf-static-top)}
+  html.cp-reduced-motion #cpLeaves .cp-leaf-sway{animation:none}
+  html.cp-reduced-motion #cpLeaves .cp-leaf-shape{opacity:calc(var(--cp-leaf-opacity) * .55)}
+
+  /* ============================================================
+     PAPER-GRID LIGHT THEME — light-only scope. Dark values are not
+     touched; every selector here only matches html.light.
+     ============================================================ */
+  html.light body.bg-mesh{
+    background-color:#F5F2E9;
+    background-image:
+      linear-gradient(rgba(25,25,25,.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(25,25,25,.12) 1px, transparent 1px);
+    background-size:48px 48px, 48px 48px;
+    background-position:0 0, 0 0;
+  }
+  html.light body{color:#1f2937}
+  html.light .glass-panel{background:rgba(255,252,244,.82);border-color:rgba(25,25,25,.14)}
+  html.light .glass-card{background:rgba(255,252,244,.78);border-color:rgba(25,25,25,.10)}
+  html.light .text-white{color:#141414}
+  html.light .text-slate-100{color:#1f2937}
+  html.light .text-slate-200{color:#334155}
+  html.light .text-slate-300{color:#475569}
+  html.light .text-slate-400{color:#57534e}
+  html.light .text-slate-500{color:#6b7280}
+  html.light .text-blue-300{color:#1d4ed8}
+  html.light .text-indigo-300{color:#4338ca}
+  html.light .text-purple-300{color:#6d28d9}
+  html.light .text-emerald-300{color:#047857}
+  html.light .text-emerald-400{color:#059669}
+  html.light .text-amber-300{color:#b45309}
+  html.light .text-amber-200{color:#92400e}
+  html.light .text-rose-300{color:#be123c}
+  html.light .text-rose-400{color:#be123c}
+  html.light #cpPomodoro{background:rgba(255,252,244,.9);color:#1f2937}
+  html.light #cpPomoStatus{border-color:rgba(25,25,25,.14);background:rgba(255,255,255,.4)}
+  html.light #cpPomoStatus:hover{background:rgba(255,255,255,.7)}
+  html.light #cpLeaves{opacity:.82}
+  html.light .cp-focus-track{background:rgba(25,25,25,.14)}
+  html.light .toast{background:#fffdf7;color:#1f2937;border-color:rgba(25,25,25,.18)}
+  html.light .toast.ok{background:#ecfdf5;color:#065f46;border-color:#34d399}
+  html.light .toast.err{background:#fef2f2;color:#991b1b;border-color:#f87171}
+  html.light .toast-action{background:rgba(25,25,25,.08);border-color:rgba(25,25,25,.25);color:#1f2937}
+</style>
 </head>
 <body class="bg-mesh text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden">
   <!-- KineticGrid background (module 1). z-0, pointer-events-none, purely decorative. -->
@@ -691,6 +828,10 @@
       </div>
       <!-- Controls -->
       <div class="flex items-center gap-3">
+        <button class="cp-pomo-pill" id="cpPomoPill" type="button" aria-label="Open the running Pomodoro timer">
+          <span class="cp-pomo-dot cp-live" aria-hidden="true"></span>
+          <span id="cpPomoPillText">Focus 25:00</span>
+        </button>
         <button class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 transition-transform hover:scale-[1.02]" id="openNewPlanBtn">
           <i class="w-3.5 h-3.5" data-lucide="sparkles"></i>
           <span>New Plan</span>
@@ -745,6 +886,23 @@
             <span>2h (Light)</span>
             <span>8h (Intense)</span>
           </div>
+          <div class="space-y-1 pt-1">
+            <div class="cp-focus-track" id="focusTodayBarTrack" role="progressbar" aria-label="Focused minutes today against the daily target" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="cp-focus-fill" id="focusTodayBar"></div>
+            </div>
+            <p class="text-[10px] text-slate-500" id="focusTodayText">Focused today 0m / 4.5h</p>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Focus Length</span>
+            <span class="font-bold text-indigo-400" id="focusLengthVal">25 min</span>
+          </div>
+          <input class="w-full accent-indigo-500 cursor-pointer h-1.5 bg-white/10 rounded-lg" id="focusLengthRange" max="90" min="10" step="5" type="range" value="25" aria-label="Focus session length in minutes"/>
+          <div class="flex justify-between text-[10px] text-slate-500">
+            <span>10 min</span>
+            <span id="focusLengthMax">90 min</span>
+          </div>
         </div>
         <div class="space-y-1.5">
           <div class="flex justify-between text-xs">
@@ -757,6 +915,13 @@
             <span>30 min</span>
           </div>
         </div>
+        <button id="cpPomoStatus" type="button" aria-label="Open the Pomodoro timer">
+          <span class="flex items-center gap-2 min-w-0">
+            <span class="cp-pomo-dot" id="cpPomoStatusDot" aria-hidden="true"></span>
+            <span class="truncate" id="cpPomoStatusText">Idle · 25m</span>
+          </span>
+          <span id="cpPomoStatusMeta">Pomodoro</span>
+        </button>
       </div>
       <div class="pt-4 border-t border-white/10 space-y-3">
         <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">Agent Sensors</span>
@@ -840,6 +1005,7 @@
                   Today's Academic Flight Plan
                 </h3>
                 <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30" id="targetLabel">Target: 4.5h Study</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-200 border border-amber-500/30" id="planFocusedToday">Focused today 0m</span>
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Dynamically Calibrated</span>
               </div>
               <p class="text-xs text-slate-400 max-w-xl" id="dashboardSummary">Loading your real schedule from SQLite…</p>
@@ -1778,13 +1944,25 @@
     toastBox.setAttribute('role', 'status');
     toastBox.setAttribute('aria-live', 'polite');
     document.body.appendChild(toastBox);
-    function showToast(msg, kind) {
+    function showToast(msg, kind, action) {
       const t = document.createElement('div');
       t.className = 'toast ' + (kind || '');
-      t.textContent = msg;
+      t.appendChild(document.createTextNode(msg));
+      let life = 4000;
+      if (action && action.label && typeof action.onClick === 'function') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = action.label;
+        btn.addEventListener('click', () => { t.remove(); action.onClick(); });
+        t.appendChild(document.createTextNode(' '));
+        t.appendChild(btn);
+        life = 9000;
+      }
       toastBox.appendChild(t);
-      setTimeout(() => t.remove(), 4000);
+      setTimeout(() => t.remove(), life);
     }
+    window.showToast = showToast;
 
     // ---------- accessibility labels ----------
     document.querySelectorAll('button[title]:not([aria-label])').forEach(b => b.setAttribute('aria-label', b.getAttribute('title')));
@@ -2259,12 +2437,18 @@
       document.getElementById('conflictBadge').textContent =
         conflicts + ' conflict' + (conflicts === 1 ? '' : 's');
 
-      document.getElementById('studyHoursVal').textContent = pendingHours.toFixed(1) + ' hrs';
+      /* The target sliders read the shared preferences store, not the
+         pending-work estimate: one source of truth for both the sidebar
+         and the floating timer. */
+      const targetHours = window.cpPrefs ? window.cpPrefs.get('dailyTargetHours') : (prefs.target || 4.5);
+      const breakMinutes = window.cpPrefs ? window.cpPrefs.get('shortBreakMinutes') : (prefs.preferred_break_minutes || 15);
+      document.getElementById('studyHoursVal').textContent = targetHours + ' hrs';
       const range = document.getElementById('studyHoursRange');
-      range.value = Math.max(2, Math.min(8, pendingHours));
-      document.getElementById('breakLengthVal').textContent = (prefs.preferred_break_minutes || 15) + ' min';
-      document.getElementById('breakLengthRange').value = Math.max(5, Math.min(30, prefs.preferred_break_minutes || 15));
-      document.getElementById('targetLabel').textContent = 'Target: ' + pendingHours.toFixed(1) + 'h Study';
+      range.value = String(targetHours);
+      document.getElementById('breakLengthVal').textContent = breakMinutes + ' min';
+      document.getElementById('breakLengthRange').value = Math.max(5, Math.min(30, breakMinutes));
+      document.getElementById('targetLabel').textContent = 'Target: ' + targetHours + 'h Study';
+      if (window.cpPaintFocusToday) window.cpPaintFocusToday();
 
       const summary = [];
       summary.push(pendingTasks.length + ' pending task(s) in your local SQLite data.');
@@ -2321,6 +2505,7 @@
           +       '<div class="flex items-center gap-4 mt-3 text-xs text-slate-300 flex-wrap">'
           +         '<span class="flex items-center gap-1 text-slate-300"><i class="w-3.5 h-3.5 text-blue-400" data-lucide="calendar"></i>Due ' + fmtDay(task.due_at) + '</span>'
           +         '<span class="flex items-center gap-1 text-slate-400"><i class="w-3.5 h-3.5 text-slate-500" data-lucide="clock"></i>Est. Duration: <strong class="text-slate-200 duration-text" title="Click to edit duration">' + (task.estimated_minutes || 30) + ' min</strong></span>'
+          +         '<span class="cp-focused-chip" data-focused-for="' + esc(task.task_id) + '"></span>'
           +       '</div>'
           +     '</div>'
           +     '<div class="flex items-center gap-1 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">'
@@ -2330,6 +2515,7 @@
           +   '</div>'
           + '</div>';
       }).join('');
+      if (window.cpPaintFocus) window.cpPaintFocus();
       lucide.createIcons();
     }
 
@@ -2533,10 +2719,11 @@
       theme: 'system',
       grid: { mode: 'default', intensity: 60 },
       cursor: { on: true, size: 28, strength: 0.4, blend: 'exclusion', shape: 'circle' },
-      pomodoro: { focus: 25, short: 5, long: 15, rounds: 4, autoStart: false, sound: true, notify: true },
+      pomodoro: { focus: 25, short: 15, long: 25, rounds: 4, autoStart: false, sound: true, notify: true },
       voice: { lang: 'en-IN', readAloud: false, rate: 1 },
       a11y: { reducedMotion: false, largeText: false, contrast: false, cameraOff: true },
       prefs: { target: 4.5, start: '09:00', end: '22:00', maxFocus: 90, break: 15 },
+      leaves: { on: true, density: 'medium' },
       runtime: { pomo: null, pomoPos: null },
     };
 
@@ -2661,6 +2848,191 @@
         document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path: 'theme', value: data.theme } }));
       },
     };
+
+    /* ------------------------------------------------------------
+       Preferences facade — the canonical preference names this feature
+       exposes, mapped onto the SAME `campuspilot.ui` fields. Nothing is
+       copied: every read and write lands in the one store above.
+       ------------------------------------------------------------ */
+    const PREF_FIELDS = {
+      focusMinutes: 'pomodoro.focus',
+      shortBreakMinutes: 'pomodoro.short',
+      longBreakMinutes: 'pomodoro.long',
+      sessionsBeforeLong: 'pomodoro.rounds',
+      dailyTargetHours: 'prefs.target',
+      planningStart: 'prefs.start',
+      planningEnd: 'prefs.end',
+      maxFocusMinutes: 'prefs.maxFocus',
+      autoStartNext: 'pomodoro.autoStart',
+      soundOn: 'pomodoro.sound',
+      notificationsOn: 'pomodoro.notify',
+    };
+    const clampNumber = (value, lo, hi, fallback) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.min(hi, Math.max(lo, n));
+    };
+
+    function getPref(name) { return get(PREF_FIELDS[name]); }
+
+    function setPref(name, value) {
+      const path = PREF_FIELDS[name];
+      if (!path) return;
+      if (name === 'focusMinutes') {
+        value = clampNumber(value, 10, Number(getPref('maxFocusMinutes')) || 90, 25);
+      } else if (name === 'shortBreakMinutes') {
+        value = clampNumber(value, 5, 30, 15);
+      } else if (name === 'longBreakMinutes') {
+        value = clampNumber(value, 5, 90, 25);
+      } else if (name === 'sessionsBeforeLong') {
+        value = clampNumber(value, 2, 8, 4);
+      } else if (name === 'dailyTargetHours') {
+        value = clampNumber(value, 1, 12, 4.5);
+      } else if (name === 'maxFocusMinutes') {
+        value = clampNumber(value, 15, 90, 90);
+        const focus = Number(getPref('focusMinutes')) || 25;
+        if (focus > value) {
+          set('pomodoro.focus', value);
+          if (typeof window.showToast === 'function') {
+            window.showToast('Focus length clamped to ' + value + ' min (max focus).', 'ok');
+          }
+        }
+      } else if (name === 'autoStartNext' || name === 'soundOn' || name === 'notificationsOn') {
+        value = Boolean(value);
+      }
+      set(path, value);
+      document.dispatchEvent(new CustomEvent('campuspilot:prefs', { detail: { name, value } }));
+    }
+
+    window.cpPrefs = {
+      FIELDS: PREF_FIELDS,
+      get: getPref,
+      set: setPref,
+      all() {
+        const out = {};
+        Object.keys(PREF_FIELDS).forEach((name) => { out[name] = getPref(name); });
+        return out;
+      },
+      onChange(fn) {
+        const handler = (event) => fn(event.detail || {});
+        document.addEventListener('campuspilot:prefs', handler);
+        return () => document.removeEventListener('campuspilot:prefs', handler);
+      },
+    };
+
+    /* Another tab changed a setting: mirror it instead of overwriting. */
+    window.addEventListener('storage', (event) => {
+      if (event.key !== KEY) return;
+      data = deepMerge(clone(DEFAULTS), read() || {});
+      apply();
+      document.dispatchEvent(new CustomEvent('campuspilot:ui', { detail: { path: '*', value: null } }));
+    });
+  })();
+
+  /* ============================================================
+     MODULE 0b — focus log
+     Completed focus minutes are stored in `campuspilot.focusLog`,
+     keyed by LOCAL date then task id. Session ids are recorded so the
+     same session can never be counted twice across refreshes or tabs.
+     ============================================================ */
+  (function () {
+    'use strict';
+    const KEY = 'campuspilot.focusLog';
+    const VERSION = 1;
+    const listeners = new Set();
+
+    const pad = (n) => String(n).padStart(2, '0');
+    function localDateKey(date) {
+      const d = date || new Date();
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+    function blank() { return { version: VERSION, days: {}, sessionIds: {} }; }
+    function read() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (!raw || typeof raw !== 'object' || raw.version !== VERSION) return blank();
+        return {
+          version: VERSION,
+          days: raw.days && typeof raw.days === 'object' ? raw.days : {},
+          sessionIds: raw.sessionIds && typeof raw.sessionIds === 'object' ? raw.sessionIds : {},
+        };
+      } catch (err) { return blank(); }
+    }
+
+    let data = read();
+
+    function persist() {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (err) { /* private mode */ }
+    }
+    function emit() {
+      listeners.forEach((fn) => { try { fn(); } catch (err) { /* listener failure must not break logging */ } });
+      document.dispatchEvent(new CustomEvent('campuspilot:focuslog'));
+    }
+    function prune() {
+      const dates = Object.keys(data.days).sort();
+      while (dates.length > 180) delete data.days[dates.shift()];
+      if (Object.keys(data.sessionIds).length > 2000) data.sessionIds = {};
+    }
+
+    function logSession(session) {
+      if (!session || !session.sessionId) return false;
+      const minutes = Math.max(0, Math.round(Number(session.minutes) || 0));
+      if (minutes <= 0) return false;
+      if (data.sessionIds[session.sessionId]) return false;
+      const date = session.date || localDateKey();
+      const task = session.taskId ? String(session.taskId) : '__unlinked';
+      if (!data.days[date]) data.days[date] = {};
+      data.days[date][task] = Math.round((Number(data.days[date][task]) || 0) + minutes);
+      data.sessionIds[session.sessionId] = date;
+      prune();
+      persist();
+      emit();
+      return true;
+    }
+
+    function dayTotal(date) {
+      const day = data.days[date || localDateKey()] || {};
+      return Object.keys(day).reduce((sum, key) => sum + (Number(day[key]) || 0), 0);
+    }
+    function taskTotal(taskId) {
+      const id = String(taskId);
+      return Object.keys(data.days).reduce((sum, date) => {
+        const day = data.days[date] || {};
+        return sum + (Number(day[id]) || 0);
+      }, 0);
+    }
+    function taskToday(taskId) {
+      const day = data.days[localDateKey()] || {};
+      return Number(day[String(taskId)]) || 0;
+    }
+    function format(minutes) {
+      const total = Math.max(0, Math.round(Number(minutes) || 0));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      if (h && m) return h + 'h ' + m + 'm';
+      if (h) return h + 'h';
+      return m + 'm';
+    }
+
+    window.cpFocusLog = {
+      KEY, localDateKey, format,
+      log: logSession,
+      dayTotal,
+      today() { return dayTotal(); },
+      taskTotal,
+      taskToday,
+      onChange(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+      get snapshot() { return data; },
+    };
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== KEY) return;
+      data = read();
+      emit();
+    });
   })();
 
   /* ============================================================
@@ -2815,6 +3187,117 @@
 
     resize();
     if (!reduced()) kick(); else drawFrame(0);
+  })();
+
+  /* ============================================================
+     MODULE 1b — FallingLeavesBackground
+     Decorative autumn leaves in a fixed layer above the page background
+     and below the app. Leaves are generated once from a stable seed and
+     animate only transform/opacity in CSS; the layer pauses with the tab
+     and turns into a sparse static scene under reduced motion.
+     ============================================================ */
+  (function () {
+    'use strict';
+    if (!window.cpUI) return;
+
+    const COLORS = ['#c2703b', '#a95a22', '#d99a2b', '#b7791f', '#8a5a2b', '#cf7f2c'];
+    const SHAPES = [
+      'M16 3C9 8 4 14 6 23c1.5 6 9 7 13 2 5.5-6.5 4-16-3-22Z',
+      'M16 2c7 5 10 12 6 20-3 6-11 5-13-1C6 12 10 6 16 2Z',
+      'M16 4c-6 2-10 8-8 14 1 4 5 6 8 4 6-3 8-11 0-18Z',
+      'M17 3c7 4 9 12 4 19-3 4-9 4-11-1C7 13 10 7 17 3Z',
+    ];
+
+    const layer = document.createElement('div');
+    layer.id = 'cpLeaves';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.dataset.on = 'true';
+    document.body.appendChild(layer);
+
+    const small = window.matchMedia('(max-width: 768px)');
+    let signature = '';
+
+    function mulberry32(seed) {
+      return function () {
+        seed |= 0;
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function densityCount(density) {
+      const base = { low: 12, medium: 20, high: 28 }[density] || 20;
+      return small.matches ? Math.max(6, Math.round(base * 0.5)) : base;
+    }
+
+    function build() {
+      const settings = window.cpUI.get().leaves || {};
+      const next = (settings.density || 'medium') + (small.matches ? '-s' : '-l');
+      if (next === signature) return;
+      signature = next;
+      layer.innerHTML = '';
+      const count = densityCount(settings.density);
+      const rnd = mulberry32(20261022);
+
+      for (let i = 0; i < count; i += 1) {
+        const size = Math.round(13 + rnd() * 15);
+        const duration = 14 + rnd() * 16;
+        const delay = -(rnd() * duration);
+        const drift = Math.round((rnd() * 2 - 1) * 140);
+        const sway = 6 + rnd() * 22;
+        const swayDuration = 2.4 + rnd() * 3.4;
+        const spin = Math.round((rnd() * 2 - 1) * 540);
+        const opacity = (0.28 + rnd() * 0.42).toFixed(2);
+        const color = COLORS[Math.floor(rnd() * COLORS.length)];
+        const shape = SHAPES[Math.floor(rnd() * SHAPES.length)];
+        const soft = i < 4;
+
+        const fall = document.createElement('div');
+        fall.className = 'cp-leaf-fall';
+        fall.style.left = (rnd() * 100).toFixed(2) + '%';
+        fall.style.animationDuration = duration.toFixed(1) + 's';
+        fall.style.animationDelay = delay.toFixed(1) + 's';
+        fall.style.setProperty('--cp-leaf-drift', drift + 'px');
+        fall.style.setProperty('--cp-leaf-spin', spin + 'deg');
+        fall.style.setProperty('--cp-leaf-static-top', Math.round(4 + rnd() * 88) + 'vh');
+
+        const swayEl = document.createElement('span');
+        swayEl.className = 'cp-leaf-sway';
+        swayEl.style.animationDuration = swayDuration.toFixed(2) + 's';
+        swayEl.style.animationDelay = (-rnd() * 3).toFixed(2) + 's';
+        swayEl.style.setProperty('--cp-leaf-sway', sway.toFixed(1) + 'px');
+
+        const leaf = document.createElement('span');
+        leaf.className = 'cp-leaf-shape' + (soft ? ' cp-leaf-soft' : '');
+        leaf.style.color = color;
+        leaf.style.setProperty('--cp-leaf-opacity', opacity);
+        leaf.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="' + shape + '" fill="currentColor"/></svg>';
+
+        swayEl.appendChild(leaf);
+        fall.appendChild(swayEl);
+        layer.appendChild(fall);
+      }
+    }
+
+    function sync() {
+      const settings = window.cpUI.get().leaves || {};
+      layer.dataset.on = settings.on === false ? 'false' : 'true';
+      if (settings.on !== false) build();
+    }
+
+    document.addEventListener('campuspilot:ui', (event) => {
+      const path = (event.detail && event.detail.path) || '';
+      if (path.indexOf('leaves') === 0 || path === '*') sync();
+    });
+    document.addEventListener('visibilitychange', () => {
+      layer.classList.toggle('cp-paused', document.hidden);
+    });
+    if (small.addEventListener) small.addEventListener('change', () => { signature = ''; sync(); });
+
+    window.cpLeaves = { layer, sync, rebuild() { signature = ''; build(); } };
+    sync();
   })();
 
   /* ============================================================
@@ -3015,10 +3498,314 @@
   })();
 
   /* ============================================================
+     MODULE 2b — Pomodoro timer store
+     The ONE timer engine. Its own `campuspilot.pomodoro` key holds the
+     mode, status, endsAt (or paused remaining) and the linked task.
+     Every read is computed from timestamps, so a throttled tab or a
+     refresh cannot drift. Completion is idempotent and logged through
+     the focus log with the session id.
+     ============================================================ */
+  (function () {
+    'use strict';
+    if (!window.cpUI || !window.cpPrefs || !window.cpFocusLog) return;
+
+    const KEY = 'campuspilot.pomodoro';
+    const VERSION = 1;
+    const MODES = ['focus', 'short', 'long'];
+    const LABELS = { focus: 'Focus', short: 'Break', long: 'Long break' };
+    const listeners = new Set();
+    const baseTitle = document.title;
+    const pad = (n) => String(n).padStart(2, '0');
+
+    function blank() {
+      return {
+        version: VERSION, mode: 'focus', status: 'idle',
+        endsAt: null, remainingMs: null, durationMs: null, elapsedMs: 0,
+        startedAt: null, sessionId: null,
+        linkedTaskId: null, linkedTaskTitle: null,
+        completedFocusSessions: 0, prompt: false, lastCompleted: null,
+      };
+    }
+    function read() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (!raw || typeof raw !== 'object' || raw.version !== VERSION) return blank();
+        const state = blank();
+        if (MODES.indexOf(raw.mode) >= 0) state.mode = raw.mode;
+        if (['idle', 'running', 'paused'].indexOf(raw.status) >= 0) state.status = raw.status;
+        state.endsAt = Number(raw.endsAt) || null;
+        state.remainingMs = Number(raw.remainingMs) || null;
+        state.durationMs = Number(raw.durationMs) || null;
+        state.elapsedMs = Math.max(0, Number(raw.elapsedMs) || 0);
+        state.startedAt = Number(raw.startedAt) || null;
+        state.sessionId = raw.sessionId || null;
+        state.linkedTaskId = raw.linkedTaskId ? String(raw.linkedTaskId) : null;
+        state.linkedTaskTitle = raw.linkedTaskTitle || null;
+        state.completedFocusSessions = Math.max(0, Number(raw.completedFocusSessions) || 0);
+        state.prompt = Boolean(raw.prompt);
+        state.lastCompleted = raw.lastCompleted && typeof raw.lastCompleted === 'object' ? raw.lastCompleted : null;
+        return state;
+      } catch (err) { return blank(); }
+    }
+
+    let data = read();
+
+    function persist() {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (err) { /* private mode / quota */ }
+    }
+    function uid() {
+      return 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+    function durationFor(mode) {
+      let minutes = 25;
+      if (mode === 'short') minutes = Number(window.cpPrefs.get('shortBreakMinutes')) || 15;
+      else if (mode === 'long') minutes = Number(window.cpPrefs.get('longBreakMinutes')) || 25;
+      else minutes = Number(window.cpPrefs.get('focusMinutes')) || 25;
+      return Math.max(1, minutes) * 60000;
+    }
+    function remaining(now) {
+      const t = now || Date.now();
+      if (data.status === 'running' && data.endsAt) return Math.max(0, data.endsAt - t);
+      if (data.status === 'paused') return Math.max(0, Number(data.remainingMs) || 0);
+      return durationFor(data.mode);
+    }
+    function currentElapsed(now) {
+      const t = now || Date.now();
+      if (data.status === 'running' && data.startedAt) {
+        return Math.max(0, Number(data.elapsedMs) || 0) + Math.max(0, t - data.startedAt);
+      }
+      return Math.max(0, Number(data.elapsedMs) || 0);
+    }
+    function totalForSession() {
+      return Number(data.durationMs) || durationFor(data.mode);
+    }
+    function snapshot() {
+      return {
+        mode: data.mode, status: data.status,
+        remainingMs: remaining(), durationMs: totalForSession(),
+        elapsedMs: currentElapsed(),
+        completedFocusSessions: data.completedFocusSessions,
+        linkedTaskId: data.linkedTaskId, linkedTaskTitle: data.linkedTaskTitle,
+        sessionId: data.sessionId, endsAt: data.endsAt,
+        prompt: data.prompt, lastCompleted: data.lastCompleted,
+      };
+    }
+    function mmss(ms) {
+      const total = Math.max(0, Math.round(ms / 1000));
+      return pad(Math.min(99, Math.floor(total / 60))) + ':' + pad(total % 60);
+    }
+    function paintTitle() {
+      if (data.status === 'running') {
+        document.title = mmss(remaining()) + ' · ' + LABELS[data.mode] + ' · ' + baseTitle;
+      } else if (document.title !== baseTitle) {
+        document.title = baseTitle;
+      }
+    }
+    function emit(type, detail) {
+      paintTitle();
+      const state = snapshot();
+      listeners.forEach((fn) => { try { fn(state, type, detail || null); } catch (err) { /* one listener must not break the timer */ } });
+      document.dispatchEvent(new CustomEvent('campuspilot:pomodoro', { detail: { type, state, detail: detail || null } }));
+    }
+
+    function start(options) {
+      if (data.status === 'running') return false;
+      const now = Date.now();
+      if (data.status === 'paused') {
+        data.status = 'running';
+        data.startedAt = now;
+        data.endsAt = now + Math.max(1000, Number(data.remainingMs) || 1000);
+      } else {
+        data.sessionId = uid();
+        data.durationMs = durationFor(data.mode);
+        data.elapsedMs = 0;
+        data.startedAt = now;
+        data.endsAt = now + data.durationMs;
+        data.remainingMs = data.durationMs;
+        data.status = 'running';
+      }
+      data.prompt = false;
+      persist();
+      emit('start', options || null);
+      return true;
+    }
+
+    function pause() {
+      if (data.status !== 'running') return;
+      const now = Date.now();
+      data.elapsedMs = currentElapsed(now);
+      data.remainingMs = Math.max(0, (data.endsAt || now) - now);
+      data.status = 'paused';
+      data.startedAt = null;
+      data.endsAt = null;
+      persist();
+      emit('pause');
+    }
+
+    function resetSessionFields() {
+      data.endsAt = null;
+      data.startedAt = null;
+      data.elapsedMs = 0;
+      data.durationMs = null;
+      data.remainingMs = null;
+      data.sessionId = null;
+    }
+
+    function reset() {
+      data.status = 'idle';
+      resetSessionFields();
+      data.prompt = false;
+      persist();
+      emit('reset');
+    }
+
+    function logPartial() {
+      const elapsed = currentElapsed();
+      const minutes = Math.round(elapsed / 60000);
+      if (data.mode === 'focus' && minutes > 0 && data.sessionId) {
+        const logged = window.cpFocusLog.log({
+          sessionId: data.sessionId,
+          minutes,
+          taskId: data.linkedTaskId,
+        });
+        return { minutes, logged, sessionId: data.sessionId, taskId: data.linkedTaskId, taskTitle: data.linkedTaskTitle };
+      }
+      return null;
+    }
+
+    function setMode(mode) {
+      if (MODES.indexOf(mode) < 0) return;
+      const changing = mode !== data.mode;
+      let partial = null;
+      if (changing && (data.status === 'running' || data.status === 'paused')) {
+        partial = logPartial();
+        resetSessionFields();
+      }
+      data.mode = mode;
+      data.status = 'idle';
+      data.prompt = false;
+      resetSessionFields();
+      if (mode !== 'focus') { data.linkedTaskId = null; data.linkedTaskTitle = null; }
+      persist();
+      emit('mode', partial);
+    }
+
+    function linkTask(taskId, title) {
+      data.linkedTaskId = taskId ? String(taskId) : null;
+      data.linkedTaskTitle = title || null;
+      if (taskId && data.mode !== 'focus') {
+        data.mode = 'focus';
+        data.status = 'idle';
+        data.prompt = false;
+        resetSessionFields();
+      }
+      persist();
+      emit('link');
+    }
+
+    function finish(options) {
+      const opts = options || {};
+      const natural = opts.natural !== false;
+      const silent = Boolean(opts.silent);
+      const now = Date.now();
+      const wasFocus = data.mode === 'focus';
+      const sessionId = data.sessionId;
+      const taskId = data.linkedTaskId;
+      const taskTitle = data.linkedTaskTitle;
+      const elapsed = currentElapsed(now);
+      const minutes = natural
+        ? Math.max(0, Math.round(totalForSession() / 60000))
+        : Math.max(0, Math.round(elapsed / 60000));
+
+      let logged = false;
+      if (wasFocus && sessionId && minutes > 0) {
+        logged = window.cpFocusLog.log({ sessionId, minutes, taskId });
+      }
+      if (wasFocus && natural) data.completedFocusSessions += 1;
+
+      const rounds = Math.max(2, Number(window.cpPrefs.get('sessionsBeforeLong')) || 4);
+      let next = 'focus';
+      if (wasFocus) {
+        next = natural && data.completedFocusSessions % rounds === 0 ? 'long' : 'short';
+      }
+
+      const detail = {
+        natural, silent, wasFocus, minutes, sessionId,
+        taskId, taskTitle, previousMode: data.mode, nextMode: next, logged,
+      };
+
+      data.status = 'idle';
+      data.mode = next;
+      resetSessionFields();
+      if (next !== 'focus') { data.linkedTaskId = null; data.linkedTaskTitle = null; }
+      data.prompt = wasFocus && natural && !silent;
+      data.lastCompleted = Object.assign({}, detail, { at: now });
+      persist();
+      emit('complete', detail);
+
+      if (natural && !silent && window.cpPrefs.get('autoStartNext')) start({ auto: true });
+      return detail;
+    }
+
+    function skip() { return finish({ natural: false }); }
+
+    function dismissPrompt() {
+      if (!data.prompt) return;
+      data.prompt = false;
+      persist();
+      emit('prompt');
+    }
+
+    function tick() {
+      if (data.status !== 'running' || !data.endsAt) return;
+      const now = Date.now();
+      if (data.endsAt - now > 0) { emit('tick'); return; }
+      /* A throttled or background tab can notice the end minutes later.
+         Finalise silently in that case: the chime belongs to the live end,
+         not to a tab that merely caught up. */
+      finish({ natural: true, silent: now - data.endsAt > 5000 });
+    }
+
+    /* A session that ended while the app was closed is finalised once,
+       silently: no chime, no notification and no auto-start chain. */
+    if (data.status === 'running' && data.endsAt && data.endsAt <= Date.now()) {
+      finish({ natural: true, silent: true });
+    } else {
+      paintTitle();
+    }
+
+    setInterval(tick, 250);
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== KEY) return;
+      data = read();
+      /* Another tab may hand over a session that already expired (closed
+         laptop, sleeping tab). Finalise it once, without a chime. */
+      if (data.status === 'running' && data.endsAt && data.endsAt <= Date.now()) {
+        finish({ natural: true, silent: true });
+        return;
+      }
+      emit('sync');
+    });
+    window.addEventListener('pagehide', () => { document.title = baseTitle; });
+
+    window.cpPomodoroStore = {
+      KEY, durationFor, remaining, start, pause, reset, setMode, linkTask, finish, skip, tick,
+      dismissPrompt, mmss,
+      get state() { return snapshot(); },
+      get label() { return LABELS[data.mode]; },
+      subscribe(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    };
+  })();
+
+  /* ============================================================
      MODULE 3 — Pomodoro floating window
-     In-page, draggable, translucent. The clock is computed from
-     timestamps (endsAt) rather than counted ticks, so it stays correct
-     in a background tab and across a refresh.
+     In-page, draggable, translucent. The clock reads the store above,
+     which computes from timestamps (endsAt) rather than counted ticks,
+     so it stays correct in a background tab and across a refresh.
 
      Countdown inspired by Skiper UI AnimatedNumber (@gurvinder-singh02),
      free-version attribution. @number-flow/react is React-only, so the
@@ -3046,6 +3833,7 @@
       '<div class="cp-pomo-head" data-drag-handle>',
       '  <span class="cp-pomo-title">Pomodoro</span>',
       '  <span class="cp-pomo-task" data-el="task"></span>',
+      '  <span class="cp-pomo-mini" data-el="mini" aria-live="off" role="timer"></span>',
       '  <span class="cp-pomo-spacer"></span>',
       '  <button type="button" data-act="minimize" aria-label="Minimize timer" title="Minimize" data-magnetic>', ICONS.min, '</button>',
       '  <button type="button" data-act="close" aria-label="Close timer" title="Close" data-magnetic>', ICONS.close, '</button>',
@@ -3068,6 +3856,7 @@
       '    <button type="button" class="cp-btn-main" data-act="toggle" aria-label="Start timer" title="Start" data-magnetic><span data-el="toggle-icon">', ICONS.play, '</span></button>',
       '    <button type="button" class="cp-btn-ghost" data-act="skip" aria-label="Skip to next phase" title="Skip" data-magnetic>', ICONS.skip, '</button>',
       '  </div>',
+      '  <div class="cp-pomo-hint" data-el="hint" role="status" aria-live="polite">Applies to next session</div>',
       '  <div class="cp-checkin" data-el="checkin">',
       '    <span>Focus done.</span><button type="button" data-act="checkin">Log check-in?</button>',
       '  </div>',
@@ -3077,6 +3866,7 @@
 
     const el = {
       task: panel.querySelector('[data-el="task"]'),
+      mini: panel.querySelector('[data-el="mini"]'),
       digits: panel.querySelector('[data-el="digits"]'),
       ring: panel.querySelector('[data-el="ring"]'),
       toggleIcon: panel.querySelector('[data-el="toggle-icon"]'),
@@ -3088,31 +3878,19 @@
 
     const CIRC = 2 * Math.PI * 52;
     const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+    const store = window.cpPomodoroStore;
+    if (!store) return;
 
-    function cfg() { return window.cpUI.get().pomodoro; }
-    function pref() { return window.cpUI.get().prefs; }
-
-    function durationFor(mode) {
-      const c = cfg();
-      if (mode === 'short') return clamp(Number(c.short) || 5, 1, 60);
-      if (mode === 'long') return clamp(Number(c.long) || 15, 1, 90);
-      /* Focus: the student's max-focus cap wins over the pomodoro default. */
-      return clamp(Math.min(Number(c.focus) || 25, Number(pref().maxFocus) || 90), 5, 90);
-    }
-
-    function durationMs() { return durationFor(rt.mode) * 60000; }
-
-    let rt = window.cpUI.get().runtime.pomo || {
-      mode: 'focus', endsAt: null, running: false,
-      remainingMs: 0, round: 0, task: null,
-      hidden: true, minimized: false, prompt: false,
+    const savedUi = window.cpUI.get().runtime.pomo || {};
+    const ui = {
+      hidden: typeof savedUi.hidden === 'boolean' ? savedUi.hidden : true,
+      minimized: Boolean(savedUi.minimized),
     };
-    if (!rt.remainingMs) rt.remainingMs = durationMs();
-
     let pos = window.cpUI.get().runtime.pomoPos || null;
+    let hintTimer = 0;
 
-    function persist() {
-      window.cpUI.set('runtime.pomo', rt);
+    function persistUi() {
+      window.cpUI.set('runtime.pomo', { hidden: ui.hidden, minimized: ui.minimized });
     }
 
     /* ---------- digits ---------- */
@@ -3142,15 +3920,11 @@
       });
     })();
 
-    function mmss(ms) {
-      const total = Math.max(0, Math.round(ms / 1000));
-      const m = Math.floor(total / 60);
-      const s = total % 60;
-      return String(Math.min(99, m)).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-    }
+    function mmss(ms) { return store.mmss(ms); }
 
     function paintTime() {
-      const text = mmss(rt.remainingMs);
+      const state = store.state;
+      const text = mmss(state.remainingMs);
       let index = 0;
       text.split('').forEach((ch) => {
         if (ch === ':') return;
@@ -3161,29 +3935,107 @@
         if (track) track.style.transform = 'translateY(-' + Number(ch) + 'em)';
       });
       el.digits.setAttribute('aria-label', text + ' remaining');
-      const ratio = durationMs() > 0 ? clamp(rt.remainingMs / durationMs(), 0, 1) : 0;
-      el.ring.setAttribute('stroke-dashoffset', String(CIRC * (1 - ratio)));
+      /* Real progress: the accent arc fills as the session is spent. Idle
+         shows only the faint track with the full duration. */
+      const total = Math.max(1, state.durationMs);
+      const progress = state.status === 'idle' ? 0 : clamp(state.elapsedMs / total, 0, 1);
+      el.ring.setAttribute('stroke-dashoffset', String(CIRC * (1 - progress)));
+    }
+
+    const MODE_LABEL = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+    const MODE_SHORT = { focus: 'Focus', short: 'Short', long: 'Long' };
+
+    function paintFocusToday() {
+      if (!window.cpFocusLog || !window.cpPrefs) return;
+      const target = Number(window.cpPrefs.get('dailyTargetHours')) || 4.5;
+      const minutes = window.cpFocusLog.today();
+      const pct = Math.min(100, Math.round((minutes / (target * 60)) * 100));
+      const bar = document.getElementById('focusTodayBar');
+      const track = document.getElementById('focusTodayBarTrack');
+      const text = document.getElementById('focusTodayText');
+      const heading = document.getElementById('planFocusedToday');
+      if (bar) bar.style.width = pct + '%';
+      if (track) track.setAttribute('aria-valuenow', String(pct));
+      if (text) text.textContent = 'Focused today ' + window.cpFocusLog.format(minutes) + ' / ' + target + 'h';
+      if (heading) heading.textContent = 'Focused today ' + window.cpFocusLog.format(minutes) + ' / ' + target + 'h';
+    }
+
+    function paintFocus() {
+      if (!window.cpFocusLog) return;
+      document.querySelectorAll('[data-focused-for]').forEach((chip) => {
+        const card = chip.closest('[data-task-id]');
+        const id = chip.dataset.focusedFor || (card && card.dataset.taskId);
+        const minutes = id ? window.cpFocusLog.taskTotal(id) : 0;
+        const estimateEl = card && card.querySelector('.duration-text');
+        const estimate = estimateEl ? (parseInt(estimateEl.textContent, 10) || 0) : 0;
+        chip.textContent = minutes > 0
+          ? (estimate ? 'Focused ' + minutes + ' / ' + estimate + ' min' : 'Focused ' + minutes + ' min')
+          : '';
+      });
+    }
+
+    function paintStatusSurfaces() {
+      const state = store.state;
+      const live = state.status === 'running' || state.status === 'paused';
+      const statusText = document.getElementById('cpPomoStatusText');
+      const statusMeta = document.getElementById('cpPomoStatusMeta');
+      const statusDot = document.getElementById('cpPomoStatusDot');
+      if (statusText) {
+        statusText.textContent = live
+          ? MODE_LABEL[state.mode] + ' · ' + mmss(state.remainingMs) + (state.status === 'running' ? ' left' : ' paused')
+          : 'Idle · ' + Math.round(store.durationFor(state.mode) / 60000) + 'm';
+      }
+      if (statusMeta) {
+        statusMeta.textContent = live && state.mode === 'focus' && state.linkedTaskTitle
+          ? state.linkedTaskTitle
+          : 'Pomodoro';
+      }
+      if (statusDot) statusDot.classList.toggle('cp-live', live);
+
+      const pill = document.getElementById('cpPomoPill');
+      const pillText = document.getElementById('cpPomoPillText');
+      if (pill) pill.classList.toggle('cp-show', Boolean(ui.hidden && live));
+      if (pillText) pillText.textContent = MODE_LABEL[state.mode] + ' ' + mmss(state.remainingMs);
+
+      const radialItem = document.querySelector('.cp-radial-item[data-item="pomodoro"]');
+      if (radialItem) radialItem.classList.toggle('cp-running', live);
     }
 
     function render() {
-      panel.style.display = rt.hidden ? 'none' : 'block';
-      panel.classList.toggle('cp-open', !rt.hidden);
-      el.task.textContent = rt.mode === 'focus' && rt.task ? rt.task : '';
-      el.toggleIcon.innerHTML = rt.running ? ICONS.pause : ICONS.play;
-      el.toggleBtn.setAttribute('aria-label', rt.running ? 'Pause timer' : 'Start timer');
-      el.toggleBtn.title = rt.running ? 'Pause' : 'Start';
+      const state = store.state;
+      panel.style.display = ui.hidden ? 'none' : 'block';
+      panel.classList.toggle('cp-open', !ui.hidden);
+
+      const taskLabel = state.mode === 'focus' && state.linkedTaskTitle ? 'Focus: ' + state.linkedTaskTitle : '';
+      el.task.textContent = taskLabel;
+      el.task.title = taskLabel;
+      if (el.mini) {
+        el.mini.textContent = ui.minimized ? mmss(state.remainingMs) : '';
+        el.mini.style.display = ui.minimized ? 'inline-block' : 'none';
+        el.mini.setAttribute('aria-label', mmss(state.remainingMs) + ' remaining');
+      }
+
+      const running = state.status === 'running';
+      el.toggleIcon.innerHTML = running ? ICONS.pause : ICONS.play;
+      el.toggleBtn.setAttribute('aria-label', running ? 'Pause timer' : (state.status === 'paused' ? 'Resume timer' : 'Start timer'));
+      el.toggleBtn.title = running ? 'Pause' : 'Start';
+
       panel.querySelectorAll('[data-mode]').forEach((btn) => {
-        btn.setAttribute('aria-pressed', btn.dataset.mode === rt.mode ? 'true' : 'false');
+        const mode = btn.dataset.mode;
+        btn.setAttribute('aria-pressed', mode === state.mode ? 'true' : 'false');
+        btn.textContent = MODE_SHORT[mode] + ' ' + Math.round(store.durationFor(mode) / 60000) + 'm';
       });
-      el.checkin.classList.toggle('cp-show', Boolean(rt.prompt));
+
+      el.checkin.classList.toggle('cp-show', Boolean(state.prompt));
       const minBtn = panel.querySelector('[data-act="minimize"]');
       if (minBtn) {
-        minBtn.innerHTML = rt.minimized ? ICONS.up : ICONS.min;
-        minBtn.setAttribute('aria-label', rt.minimized ? 'Expand timer' : 'Minimize timer');
+        minBtn.innerHTML = ui.minimized ? ICONS.up : ICONS.min;
+        minBtn.setAttribute('aria-label', ui.minimized ? 'Expand timer' : 'Minimize timer');
       }
-      el.body.style.display = rt.minimized ? 'none' : 'block';
-      panel.style.width = rt.minimized ? 'auto' : '272px';
+      el.body.style.display = ui.minimized ? 'none' : 'block';
+      panel.style.width = ui.minimized ? 'auto' : '272px';
       paintTime();
+      paintStatusSurfaces();
     }
 
     /* ---------- position ---------- */
@@ -3235,14 +4087,27 @@
     el.head.addEventListener('pointerup', endDrag);
     el.head.addEventListener('pointercancel', endDrag);
 
-    /* ---------- sound + notification ---------- */
+    /* ---------- sound + notification (permission on a user gesture) ---------- */
     let audioCtx = null;
-    function chime() {
-      if (!cfg().sound) return;
+    let audioPrimed = false;
+
+    function primeAudio() {
+      if (audioPrimed) return;
+      if (!window.cpPrefs.get('soundOn')) return;
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) return;
+      audioPrimed = true;
       try {
         audioCtx = audioCtx || new Ctor();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (err) { /* audio is best-effort */ }
+    }
+    document.addEventListener('pointerdown', primeAudio, { once: true, capture: true });
+    document.addEventListener('keydown', primeAudio, { once: true, capture: true });
+
+    function chime() {
+      if (!window.cpPrefs.get('soundOn') || !audioCtx) return;
+      try {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         [880, 1174.66].forEach((freq, index) => {
           const osc = audioCtx.createOscillator();
@@ -3261,214 +4126,255 @@
     }
 
     function askNotify() {
-      if (!cfg().notify || !('Notification' in window)) return;
+      if (!window.cpPrefs.get('notificationsOn') || !('Notification' in window)) return;
       if (Notification.permission === 'default') {
         try { Notification.requestPermission(); } catch (err) { /* ignore */ }
       }
     }
 
     function notify(title, body) {
-      if (!cfg().notify || !('Notification' in window)) return;
+      if (!window.cpPrefs.get('notificationsOn') || !('Notification' in window)) return;
       if (Notification.permission !== 'granted') return;
       try { new Notification(title, { body, silent: true }); } catch (err) { /* ignore */ }
     }
 
-    function toast(msg, kind) {
-      if (typeof window.showToast === 'function') window.showToast(msg, kind);
+    function toast(msg, kind, action) {
+      if (typeof window.showToast === 'function') window.showToast(msg, kind, action);
     }
 
-    /* ---------- state machine ---------- */
-    function start() {
-      if (rt.running) return;
-      askNotify();
-      rt.endsAt = Date.now() + Math.max(1000, rt.remainingMs || durationMs());
-      rt.running = true;
-      rt.prompt = false;
-      persist();
-      render();
+    function openCheckIn(taskTitle) {
+      const title = document.getElementById('checkInTitle');
+      if (title && taskTitle) title.textContent = 'How did "' + taskTitle + '" go?';
+      const jump = document.getElementById('jumpToCheckInBtn');
+      if (jump) jump.click();
     }
 
-    function pause() {
-      if (!rt.running) return;
-      rt.remainingMs = Math.max(0, rt.endsAt - Date.now());
-      rt.running = false;
-      rt.endsAt = null;
-      persist();
-      render();
+    function estimateFor(taskId) {
+      const card = document.querySelector('[data-task-id="' + String(taskId).replace(/"/g, '') + '"]');
+      const el = card && card.querySelector('.duration-text');
+      const mins = el ? parseInt(el.textContent, 10) : NaN;
+      return Number.isFinite(mins) ? mins : 0;
     }
 
-    function reset() {
-      rt.running = false;
-      rt.endsAt = null;
-      rt.remainingMs = durationMs();
-      persist();
-      render();
-    }
-
-    function setMode(mode) {
-      rt.mode = mode;
-      rt.running = false;
-      rt.endsAt = null;
-      rt.remainingMs = durationFor(mode) * 60000;
-      rt.prompt = false;
-      if (mode !== 'focus') rt.task = null;
-      persist();
-      render();
-    }
-
-    function finish(skipped) {
-      const wasFocus = rt.mode === 'focus';
-      rt.running = false;
-      rt.endsAt = null;
-      rt.remainingMs = 0;
-      if (!skipped) {
-        chime();
-        notify(wasFocus ? 'Focus session complete' : 'Break over', wasFocus ? 'Time for a break.' : 'Back to focus when you are ready.');
-        toast(wasFocus ? 'Focus session complete — time for a break.' : 'Break finished.', 'ok');
+    function handleComplete(detail) {
+      if (!detail) return;
+      if (detail.silent) return; /* ended while the app was closed: log only */
+      if (!detail.natural) {
+        if (detail.wasFocus && detail.minutes > 0) toast('Partial focus logged: ' + detail.minutes + ' min.', 'ok');
+        return;
       }
-      if (wasFocus && !skipped) rt.round = (rt.round || 0) + 1;
-      rt.prompt = wasFocus && !skipped;
-      const rounds = clamp(Number(cfg().rounds) || 4, 2, 8);
-      const next = wasFocus ? ((rt.round % rounds === 0) ? 'long' : 'short') : 'focus';
-      rt.mode = next;
-      rt.remainingMs = durationFor(next) * 60000;
-      if (next !== 'focus') rt.task = null;
-      persist();
-      render();
-      if (cfg().autoStart && !skipped) start();
-    }
-
-    function tick() {
-      if (!rt.running || rt.endsAt == null) return;
-      rt.remainingMs = Math.max(0, rt.endsAt - Date.now());
-      paintTime();
-      if (rt.remainingMs <= 0) finish(false);
-    }
-    setInterval(tick, 250);
-
-    /* ---------- open / close ---------- */
-    function open(taskLabel) {
-      if (taskLabel) {
-        rt.task = taskLabel;
-        rt.mode = 'focus';
-        rt.remainingMs = durationFor('focus') * 60000;
-        rt.running = false;
-        rt.endsAt = null;
-        rt.prompt = false;
+      chime();
+      if (!detail.wasFocus) {
+        notify('Break over', 'Back to focus when you are ready.');
+        toast('Break finished.', 'ok');
+        return;
       }
-      rt.hidden = false;
-      rt.minimized = false;
-      persist();
+      notify('Focus session complete', detail.minutes + ' minutes logged.' + (detail.taskTitle ? ' Task: ' + detail.taskTitle : ''));
+      toast('Focus complete — ' + detail.minutes + ' min logged.', 'ok', {
+        label: 'Log check-in?',
+        onClick() { openCheckIn(detail.taskTitle); },
+      });
+      if (!detail.taskId || !detail.taskTitle) return;
+      const estimate = estimateFor(detail.taskId);
+      if (!estimate) return;
+      if (window.cpFocusLog.taskTotal(detail.taskId) < estimate) return;
+      toast('"' + detail.taskTitle + '" reached its ' + estimate + ' min estimate.', 'ok', {
+        label: 'Mark done',
+        onClick() {
+          const card = document.querySelector('[data-task-id="' + String(detail.taskId).replace(/"/g, '') + '"]');
+          if (card && typeof window.setTaskDone === 'function') window.setTaskDone(card, true);
+        },
+      });
+    }
+
+    /* ---------- open / hide ---------- */
+    function open(task) {
+      if (task && task.id) {
+        const state = store.state;
+        if (state.status === 'running' && state.mode === 'focus' && state.linkedTaskId && state.linkedTaskId !== String(task.id)) {
+          const ok = window.confirm('A focus session for "' + (state.linkedTaskTitle || 'another task') + '" is running. Start a new session for "' + task.title + '"? The current one is logged with the time focused so far.');
+          if (!ok) return;
+          store.skip();
+        }
+        store.linkTask(task.id, task.title);
+      }
+      ui.hidden = false;
+      ui.minimized = false;
+      persistUi();
       applyPos();
       render();
     }
 
     function hide() {
-      rt.hidden = true;
-      persist();
+      ui.hidden = true;
+      persistUi();
       render();
     }
 
-    function close() {
-      rt.running = false;
-      rt.endsAt = null;
-      rt.remainingMs = durationMs();
-      rt.hidden = true;
-      rt.prompt = false;
-      persist();
-      render();
-      toast('Timer stopped.');
+    /* Closing keeps a running timer alive; the header pill and sidebar row
+       stay live and bring the window back in one click. */
+    function close() { hide(); }
+    function toggleVisible() { if (ui.hidden) open(); else hide(); }
+
+    function showNextSessionHint() {
+      const hint = panel.querySelector('[data-el="hint"]');
+      if (!hint) return;
+      if (store.state.status === 'idle') { hint.classList.remove('cp-show'); return; }
+      hint.classList.add('cp-show');
+      if (hintTimer) clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => hint.classList.remove('cp-show'), 6000);
     }
 
-    function toggleVisible() {
-      if (rt.hidden) open(); else hide();
-    }
-
+    /* ---------- controls ---------- */
     panel.addEventListener('click', (event) => {
+      primeAudio();
       const action = event.target.closest('[data-act]');
       if (action) {
         const act = action.dataset.act;
-        if (act === 'toggle') { rt.running ? pause() : start(); }
-        else if (act === 'reset') { reset(); }
-        else if (act === 'skip') { finish(true); }
-        else if (act === 'close') { close(); }
-        else if (act === 'minimize') { rt.minimized = !rt.minimized; persist(); render(); applyPos(); }
-        else if (act === 'checkin') {
-          rt.prompt = false;
-          persist();
+        if (act === 'toggle') {
+          if (store.state.status === 'running') store.pause();
+          else { primeAudio(); askNotify(); store.start({ userInitiated: true }); }
+        } else if (act === 'reset') {
+          store.reset();
+        } else if (act === 'skip') {
+          store.skip();
+        } else if (act === 'close') {
+          close();
+        } else if (act === 'minimize') {
+          ui.minimized = !ui.minimized;
+          persistUi();
           render();
-          const jump = document.getElementById('jumpToCheckInBtn');
-          if (jump) jump.click();
+          applyPos();
+        } else if (act === 'checkin') {
+          const last = store.state.lastCompleted;
+          store.dismissPrompt();
+          openCheckIn(last && last.taskTitle);
         }
         return;
       }
       const modeBtn = event.target.closest('[data-mode]');
-      if (modeBtn) setMode(modeBtn.dataset.mode);
+      if (!modeBtn) return;
+      if (modeBtn.dataset.mode === store.state.mode) return;
+      store.setMode(modeBtn.dataset.mode);
     });
 
-    /* P toggles the window, but never while the student is typing. */
+    /* P toggles the window, but never while typing, never in a modal or the
+       settings drawer, and never as Ctrl/Cmd+P. */
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'p' && event.key !== 'P') return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (window.cpSettings && window.cpSettings.isOpen) return;
+      if (window.cpRadial && window.cpRadial.isOpen) return;
+      const modal = document.getElementById('diffModal');
+      if (modal && !modal.classList.contains('hidden')) return;
       event.preventDefault();
       toggleVisible();
     });
 
     /* ---------- per-task "Start focus" ---------- */
+    const focusIcon = '<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M8 5.1v13.8L19 12z"/></svg>';
+
     function decorateCards() {
       document.querySelectorAll('[data-task-id]').forEach((card) => {
-        if (card.querySelector('[data-cp-focus]')) return;
         const titleEl = card.querySelector('.task-title, h3, h4, h5');
         const title = titleEl ? titleEl.textContent.trim() : 'this task';
-        const host = card.querySelector('button') ? card.querySelector('button').parentElement : null;
-        if (!host) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.cpFocus = '1';
-        btn.className = 'cp-startfocus';
-        btn.setAttribute('data-magnetic', '');
-        btn.setAttribute('aria-label', 'Start a focus session for ' + title);
-        btn.title = 'Start a focus session for ' + title;
-        btn.innerHTML = ICONS.play + '<span>Start focus</span>';
-        btn.addEventListener('click', (event) => { event.stopPropagation(); open(title); });
-        host.appendChild(btn);
+
+        if (!card.querySelector('[data-cp-focus]')) {
+          const host = card.querySelector('button') ? card.querySelector('button').parentElement : null;
+          if (host) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.cpFocus = '1';
+            btn.className = 'cp-startfocus';
+            btn.setAttribute('data-magnetic', '');
+            btn.setAttribute('aria-label', 'Start a focus session for ' + title);
+            btn.title = 'Start a focus session for ' + title;
+            btn.innerHTML = focusIcon + '<span>Start focus</span>';
+            btn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              open({ id: card.dataset.taskId, title });
+            });
+            host.appendChild(btn);
+          }
+        }
+
+        if (!card.querySelector('[data-focused-for]')) {
+          const estimate = card.querySelector('.duration-text');
+          if (estimate) {
+            const chip = document.createElement('span');
+            chip.className = 'cp-focused-chip';
+            chip.dataset.focusedFor = card.dataset.taskId || '';
+            estimate.insertAdjacentElement('afterend', chip);
+          }
+        }
       });
+      paintFocus();
     }
-    decorateCards();
     new MutationObserver(decorateCards).observe(document.body, { childList: true, subtree: true });
 
-    /* ---------- react to settings changes ---------- */
-    document.addEventListener('campuspilot:ui', (event) => {
-      const path = (event.detail && event.detail.path) || '';
-      if (path.indexOf('runtime') === 0) return;
-      if (path.indexOf('pomodoro') === 0 || path.indexOf('prefs') === 0) {
-        if (!rt.running) rt.remainingMs = durationMs();
-        render();
+    /* Sidebar status row + header pill both bring the window back. */
+    const statusBtn = document.getElementById('cpPomoStatus');
+    if (statusBtn) statusBtn.addEventListener('click', () => open());
+    const pillBtn = document.getElementById('cpPomoPill');
+    if (pillBtn) pillBtn.addEventListener('click', () => open());
+
+    /* ---------- react to shared-store changes ---------- */
+    store.subscribe(() => { render(); });
+
+    document.addEventListener('campuspilot:pomodoro', (event) => {
+      const detail = event.detail || {};
+      if (detail.type === 'complete') {
+        handleComplete(detail.detail);
+      } else if (detail.type === 'mode' && detail.detail && detail.detail.logged) {
+        toast('Partial focus logged: ' + detail.detail.minutes + ' min.', 'ok');
       }
     });
 
-    /* ---------- restore after a refresh ---------- */
-    if (rt.running && rt.endsAt) {
-      const left = rt.endsAt - Date.now();
-      if (left > 0) {
-        rt.remainingMs = left;
-        if (!rt.hidden) { applyPos(); }
-      } else {
-        finish(false);
-      }
+    document.addEventListener('campuspilot:prefs', () => {
+      render();
+      paintFocusToday();
+      showNextSessionHint();
+    });
+
+    if (window.cpFocusLog) {
+      window.cpFocusLog.onChange(() => { paintFocus(); paintFocusToday(); });
     }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      /* Returning to the tab may cross midnight: re-read the local date. */
+      paintFocus();
+      paintFocusToday();
+    });
+
+    window.cpPaintFocus = paintFocus;
+    window.cpPaintFocusToday = paintFocusToday;
+
     applyPos();
     render();
+    decorateCards();
+    paintFocusToday();
 
     window.cpPomodoro = {
       open, hide, close, toggle: toggleVisible,
-      start, pause, reset, finish,
-      /* exposed so the settings panel can repaint, and so the timer can be
-         stepped deterministically in tests (throttled tabs skip intervals). */
-      tick,
-      get state() { return rt; },
+      start() { primeAudio(); askNotify(); store.start({ userInitiated: true }); },
+      pause() { store.pause(); },
+      reset() { store.reset(); },
+      finish() { return store.skip(); },
+      skip() { return store.skip(); },
+      tick() { store.tick(); },
+      paint() { render(); },
+      get state() {
+        const state = store.state;
+        return Object.assign({}, state, {
+          hidden: ui.hidden,
+          minimized: ui.minimized,
+          running: state.status === 'running',
+          task: state.linkedTaskTitle,
+          round: state.completedFocusSessions,
+        });
+      },
     };
   })();
 
@@ -3743,7 +4649,7 @@
         btn.dataset.item = item.id;
         btn.setAttribute('data-magnetic', '');
         btn.setAttribute('aria-label', item.label + (item.hint ? ' (' + item.hint + ')' : ''));
-        btn.innerHTML = SVGS[item.icon] + '<span class="cp-radial-tip" aria-hidden="true">' + item.label + (item.hint ? '<kbd>' + item.hint + '</kbd>' : '') + '</span>';
+        btn.innerHTML = SVGS[item.icon] + (item.id === 'pomodoro' ? '<span class="cp-radial-dot" aria-hidden="true"></span>' : '') + '<span class="cp-radial-tip" aria-hidden="true">' + item.label + (item.hint ? '<kbd>' + item.hint + '</kbd>' : '') + '</span>';
         btn.addEventListener('click', () => {
           if (item.toggle) {
             const box = document.getElementById(item.toggle);
@@ -3825,6 +4731,11 @@
       logo.classList.add('cp-logo-open');
       logo.setAttribute('aria-expanded', 'true');
       paintToggles();
+      const pomoItem = items.find((btn) => btn.dataset.item === 'pomodoro');
+      if (pomoItem && window.cpPomodoroStore) {
+        const state = window.cpPomodoroStore.state;
+        pomoItem.classList.toggle('cp-running', state.status === 'running' || state.status === 'paused');
+      }
       items.forEach((btn, index) => { btn.style.transitionDelay = (16 + index * 38) + 'ms'; });
       if (items[0]) items[0].focus({ preventScroll: true });
     }
@@ -3913,6 +4824,8 @@
         ${html('Background')}
           ${row('Grid style', '<select data-ui="grid.mode" aria-label="Grid style"><option value="default">Default</option><option value="monochrome">Monochrome</option><option value="off">Off</option></select>')}
           ${row('Intensity', range('grid.intensity', 0, 100, 5))}
+          ${row('Falling leaves', check('leaves.on'))}
+          ${row('Leaf density', '<select data-ui="leaves.density" aria-label="Leaf density"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>')}
         </div>
         ${html('Cursor')}
           ${row('Magnetic cursor', check('cursor.on'))}
@@ -3922,13 +4835,14 @@
           ${row('Shape', '<select data-ui="cursor.shape" aria-label="Cursor shape"><option value="circle">Circle</option><option value="rounded">Rounded</option><option value="square">Square</option></select>')}
         </div>
         ${html('Pomodoro')}
-          ${row('Focus (min)', num('pomodoro.focus', 5, 90, 1))}
-          ${row('Short break', num('pomodoro.short', 1, 60, 1))}
-          ${row('Long break', num('pomodoro.long', 1, 90, 1))}
-          ${row('Sessions before long break', num('pomodoro.rounds', 2, 8, 1))}
-          ${row('Auto-start next', check('pomodoro.autoStart'))}
-          ${row('Chime', check('pomodoro.sound'))}
-          ${row('Notifications', check('pomodoro.notify'))}
+          ${row('Focus length (min)', '<input type="number" data-pref="focusMinutes" data-type="number" min="10" max="90" step="5" aria-label="Focus length in minutes">')}
+          ${row('Short break (min)', '<input type="number" data-pref="shortBreakMinutes" data-type="number" min="5" max="30" step="5" aria-label="Short break in minutes">')}
+          ${row('Long break (min)', '<input type="number" data-pref="longBreakMinutes" data-type="number" min="5" max="90" step="5" aria-label="Long break in minutes">')}
+          ${row('Sessions before long break', '<input type="number" data-pref="sessionsBeforeLong" data-type="number" min="2" max="8" step="1" aria-label="Sessions before a long break">')}
+          ${row('Auto-start next', '<input type="checkbox" data-pref="autoStartNext" data-type="bool" aria-label="Auto-start the next session">')}
+          ${row('Chime', '<input type="checkbox" data-pref="soundOn" data-type="bool" aria-label="Chime when a session ends">')}
+          ${row('Notifications', '<input type="checkbox" data-pref="notificationsOn" data-type="bool" aria-label="Browser notifications when a session ends">')}
+          <p class="cp-set-note">The sidebar, this panel and the floating timer share these values. A change during a running session applies to the next one.</p>
         </div>
         ${html('Study preferences')}
           ${row('Daily target (h)', num('prefs.target', 1, 12, 0.5))}
@@ -3975,10 +4889,21 @@
       const hoursRange = document.getElementById('studyHoursRange');
       const breakVal = document.getElementById('breakLengthVal');
       const breakRange = document.getElementById('breakLengthRange');
+      const focusVal = document.getElementById('focusLengthVal');
+      const focusRange = document.getElementById('focusLengthRange');
+      const focusMax = document.getElementById('focusLengthMax');
+      const maxFocus = Number(window.cpPrefs.get('maxFocusMinutes')) || 90;
+      const focusMinutes = Number(window.cpPrefs.get('focusMinutes')) || 25;
       if (hoursVal) hoursVal.textContent = prefs.target + ' hrs';
       if (hoursRange) hoursRange.value = String(prefs.target);
       if (breakVal) breakVal.textContent = prefs.break + ' min';
       if (breakRange) breakRange.value = String(prefs.break);
+      if (focusVal) focusVal.textContent = focusMinutes + ' min';
+      if (focusRange) {
+        focusRange.max = String(maxFocus);
+        focusRange.value = String(Math.min(focusMinutes, maxFocus));
+      }
+      if (focusMax) focusMax.textContent = maxFocus + ' min';
     }
 
     function validateStudy(values) {
@@ -4053,6 +4978,30 @@
       });
     }
 
+    /* Pomodoro controls write through the shared preferences facade, so the
+       sidebar, this drawer and the floating window can never drift apart. */
+    function bindPrefControls() {
+      drawer.querySelectorAll('[data-pref]').forEach((el) => {
+        el.addEventListener('change', () => {
+          const name = el.dataset.pref;
+          const type = el.dataset.type || 'string';
+          const value = type === 'bool' ? el.checked : Number(el.value);
+          window.cpPrefs.set(name, value);
+          refresh();
+          if (name === 'shortBreakMinutes') {
+            const prefs = window.cpUI.get().prefs;
+            persistStudy({
+              target: prefs.target,
+              breakMin: Number(window.cpPrefs.get('shortBreakMinutes')),
+              start: prefs.start,
+              end: prefs.end,
+              maxFocus: prefs.maxFocus,
+            });
+          }
+        });
+      });
+    }
+
     function refresh() {
       drawer.querySelectorAll('[data-ui]').forEach((el) => {
         const current = window.cpUI.get(el.dataset.ui);
@@ -4070,6 +5019,11 @@
       const preset = window.cpUI.get().preset;
       drawer.querySelectorAll('[data-preset]').forEach((btn) => {
         btn.setAttribute('aria-pressed', btn.dataset.preset === preset ? 'true' : 'false');
+      });
+      drawer.querySelectorAll('[data-pref]').forEach((el) => {
+        const value = window.cpPrefs.get(el.dataset.pref);
+        if ((el.dataset.type || '') === 'bool' || el.type === 'checkbox') el.checked = Boolean(value);
+        else el.value = value == null ? '' : String(value);
       });
     }
 
@@ -4194,11 +5148,12 @@
       });
     }
 
-    /* Sidebar sliders: the Pomodoro break is a real preference, so persist it. */
+    /* Sidebar sliders write the same store the drawer and timer read. */
     const breakSlider = document.getElementById('breakLengthRange');
     if (breakSlider) {
       breakSlider.addEventListener('change', () => {
         const prefs = window.cpUI.get().prefs;
+        window.cpPrefs.set('shortBreakMinutes', Number(breakSlider.value));
         persistStudy({
           target: prefs.target,
           breakMin: Number(breakSlider.value),
@@ -4211,13 +5166,26 @@
     const hoursSlider = document.getElementById('studyHoursRange');
     if (hoursSlider) {
       hoursSlider.addEventListener('change', () => {
-        window.cpUI.set('prefs.target', Number(hoursSlider.value));
+        window.cpPrefs.set('dailyTargetHours', Number(hoursSlider.value));
         syncSidebar();
       });
     }
+    const focusSlider = document.getElementById('focusLengthRange');
+    const focusLabel = document.getElementById('focusLengthVal');
+    if (focusSlider) {
+      focusSlider.addEventListener('input', () => {
+        if (focusLabel) focusLabel.textContent = focusSlider.value + ' min';
+      });
+      focusSlider.addEventListener('change', () => {
+        window.cpPrefs.set('focusMinutes', Number(focusSlider.value));
+        syncSidebar();
+      });
+    }
+    document.addEventListener('campuspilot:prefs', () => { syncSidebar(); });
 
     /* ---------- boot ---------- */
     bindControls();
+    bindPrefControls();
     refresh();
     /* Seed the local prefs from whatever the server already has. */
     window.addEventListener('load', async () => {
