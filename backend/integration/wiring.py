@@ -22,6 +22,7 @@ from typing import Any
 import services.campuspilot_backend as backend
 from agent.config import load_config
 from agent.controller import CampusPilotAgent
+from agent.live_budget import budget
 from agent.llm_client import GeminiLLMClient, LLMUnavailableError
 from services.database import get_connection, init_db, transaction
 from services.planner import detect_deadline_conflicts
@@ -75,7 +76,10 @@ def demo_student_id() -> str:
 
 
 def llm_status() -> str:
-    return "live" if load_config().gemini_api_key else "offline"
+    """FIX (deploy-ready, item 3): live | offline | capped, never the key."""
+    if not load_config().gemini_api_key:
+        return "offline"
+    return "capped" if budget.remaining() <= 0 else "live"
 
 
 def _data(envelope: Any) -> dict:
@@ -288,6 +292,56 @@ def startup() -> None:
                 "DEMO_STUDENT_ID=%s has no student row; the demo expects %s",
                 target, SEEDED_STUDENT_ID,
             )
+
+
+def reset_demo_data() -> dict:
+    """FIX (deploy-ready, item 5): wipe the demo student and seed it again.
+
+    Every visitor shares one demo student, so a reset is global by design.
+    Only rows owned by the demo student are removed; the schema is kept and
+    ``seed_demo`` is idempotent and relative to the current IST time.
+    """
+    targets = {SEEDED_STUDENT_ID, demo_student_id()}
+    with get_connection() as connection:
+        with transaction(connection):
+            for target in targets:
+                connection.execute(
+                    """
+                    DELETE FROM plan_items
+                    WHERE plan_id IN (
+                        SELECT plan_id FROM plans WHERE student_id = ?
+                    )
+                    """,
+                    (target,),
+                )
+                for table in (
+                    "plans",
+                    "checkins",
+                    "tasks",
+                    "deadlines",
+                    "events",
+                    "preferences",
+                    "tool_logs",
+                ):
+                    connection.execute(
+                        f"DELETE FROM {table} WHERE student_id = ?", (target,)
+                    )
+                # The seeded notices are campus-wide (student_id NULL), so a
+                # student-scoped delete would leave them behind and the reseed
+                # would hit the notice_id primary key.
+                connection.execute(
+                    """
+                    DELETE FROM notices
+                    WHERE student_id = ? OR notice_id LIKE 'notice_demo_%'
+                    """,
+                    (target,),
+                )
+                connection.execute(
+                    "DELETE FROM students WHERE student_id = ?", (target,)
+                )
+    summary = seed_demo()
+    logger.info("demo reset: %s", summary.get("reason", "seeded"))
+    return {"seeded": bool(summary.get("seeded")), "student_id": SEEDED_STUDENT_ID}
 
 
 def cancel_pending_plan(student_id: str, plan_id: str) -> bool:

@@ -190,7 +190,9 @@ class StateResponse(BaseModel):
     checkin: CheckinOut | None = None
     notices: NoticesOut
     date_label: str
-    llm: Literal["live", "offline"]
+    # FIX (deploy-ready, item 3): "capped" = key present but today's budget is
+    # spent, so the UI keeps showing its fallback badge.
+    llm: Literal["live", "offline", "capped"]
     conflicts: list[str] = Field(default_factory=list)
 
 
@@ -215,5 +217,7 @@ class OkResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-    llm: Literal["live", "offline"]
+    llm: Literal["live", "offline", "capped"]
     db: Literal["ok"]
+    # FIX (deploy-ready, item 3): how much live AI is left *today*. Never a key.
+    live_calls_remaining: int = 0

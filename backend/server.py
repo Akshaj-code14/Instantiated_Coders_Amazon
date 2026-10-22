@@ -10,6 +10,8 @@ origin, so no CORS is needed and the session cookie stays HttpOnly.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import re
@@ -19,11 +21,18 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import services.campuspilot_backend as backend
 from agent.config import load_config
+from agent.live_budget import (
+    budget,
+    chat_limiter,
+    client_ip_from_headers,
+    login_limiter,
+    reset_limiter,
+)
 from services.database import get_connection
 from services.timeutil import now_ist, to_iso, to_ist
 from integration.api_models import (
@@ -52,6 +61,7 @@ from integration.wiring import (
     owned_task,
     pending_conflicts,
     pending_plan_data,
+    reset_demo_data,
     startup,
     task_due_at,
     update_preferences,
@@ -62,6 +72,35 @@ BASE_DIR = Path(__file__).resolve().parent
 UI_PATH = BASE_DIR.parent / "frontend" / "campuspilot_ui.html"
 COOKIE_NAME = "campuspilot_session"
 PORT = int((os.getenv("PORT") or "8000").strip() or "8000")
+
+# FIX (deploy-ready, items 4/6): deploy-only knobs, all env-driven.
+MAX_BODY_BYTES = 16_384
+DEMO_PASSWORD = (os.getenv("DEMO_PASSWORD") or "").strip()
+PASSWORD_COOKIE = "campuspilot_demo"
+PASSWORD_COOKIE_AGE = 12 * 60 * 60
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Permissions-Policy": "microphone=(self)",
+}
+LOGIN_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusPilot</title>
+<style>body{font-family:system-ui,sans-serif;background:#0b1020;color:#e2e8f0;
+min-height:100vh;display:grid;place-items:center;margin:0}form{background:#131a30;
+padding:2rem;border-radius:1rem;border:1px solid #26304d;max-width:22rem}
+input{width:100%;padding:.7rem;border-radius:.5rem;border:1px solid #33415c;
+background:#0b1020;color:#e2e8f0}button{margin-top:.9rem;width:100%;padding:.7rem;
+border:0;border-radius:.5rem;background:#4f46e5;color:#fff;font-weight:600}</style>
+</head><body><form method="get" action="/">
+<h1 style="font-size:1.1rem;margin:0 0 .4rem">CampusPilot demo</h1>
+<p style="font-size:.8rem;color:#94a3b8;margin:0 0 1rem">This demo is password
+protected. Ask the presenter for the password.</p>
+<input type="password" name="demo_password" aria-label="Demo password" autofocus>
+<button type="submit">Open demo</button></form></body></html>"""
 
 AFFIRMATIVE_RE = re.compile(
     r"^\s*(yes|y|yeah|yep|ok|okay|sure|confirm|confirmed|save it|do it|go ahead)"
@@ -82,9 +121,66 @@ app = FastAPI(title="CampusPilot", version="1.0.0", lifespan=lifespan)
 registry = SessionRegistry()
 
 
+def _password_digest() -> str:
+    return hashlib.sha256(DEMO_PASSWORD.encode("utf-8")).hexdigest()
+
+
+def _password_ok(request: Request) -> bool:
+    """True when the request carries the demo password (or its cookie hash)."""
+    presented = (
+        request.headers.get("x-demo-password")
+        or request.query_params.get("demo_password")
+        or request.cookies.get(PASSWORD_COOKIE)
+        or ""
+    ).strip()
+    if not presented or not DEMO_PASSWORD:
+        return False
+    digest = _password_digest()
+    return hmac.compare_digest(presented, DEMO_PASSWORD) or hmac.compare_digest(
+        presented, digest
+    )
+
+
 @app.middleware("http")
-async def same_origin_guard(request: Request, call_next):
+async def deploy_guard(request: Request, call_next):
+    """FIX (deploy-ready, items 4/6): limits, optional gate, safe headers."""
+    peer = request.client.host if request.client else None
+    request.state.client_ip = client_ip_from_headers(
+        peer, request.headers.get("x-forwarded-for")
+    )
+
+    # Optional password gate (off unless DEMO_PASSWORD is set); /health is open
+    # so the host's health check keeps working.
+    if DEMO_PASSWORD and request.url.path != "/health":
+        if not _password_ok(request):
+            if not login_limiter.allow(request.state.client_ip):
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "Too many password attempts. Wait a minute."},
+                    headers=SECURITY_HEADERS,
+                )
+            if request.url.path == "/" and request.method == "GET":
+                return HTMLResponse(
+                    LOGIN_PAGE, status_code=401, headers=SECURITY_HEADERS
+                )
+            return JSONResponse(
+                status_code=401,
+                content={"error": "This demo is password protected."},
+                headers=SECURITY_HEADERS,
+            )
+
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        try:
+            declared = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            declared = MAX_BODY_BYTES + 1
+        if declared > MAX_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "That request is too large."},
+                headers=SECURITY_HEADERS,
+            )
+
         origin = request.headers.get("origin")
         if origin:
             allowed = {
@@ -96,8 +192,28 @@ async def same_origin_guard(request: Request, call_next):
                 return JSONResponse(
                     status_code=403,
                     content={"error": "Cross-origin request blocked."},
+                    headers=SECURITY_HEADERS,
                 )
-    return await call_next(request)
+
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    # Remember a correct ?demo_password= for the rest of the browsing session;
+    # the cookie holds the hash, never the password itself.
+    if (
+        DEMO_PASSWORD
+        and request.query_params.get("demo_password")
+        and _password_ok(request)
+    ):
+        response.set_cookie(
+            PASSWORD_COOKIE,
+            _password_digest(),
+            max_age=PASSWORD_COOKIE_AGE,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -171,7 +287,14 @@ def health():
         return JSONResponse(
             status_code=503, content={"error": "Database unavailable."}
         )
-    return {"status": "ok", "llm": llm_status(), "db": "ok"}
+    # FIX (deploy-ready, item 3): capped is a normal state, and the payload
+    # never contains the key or any part of it.
+    return {
+        "status": "ok",
+        "llm": llm_status(),
+        "db": "ok",
+        "live_calls_remaining": budget.remaining(),
+    }
 
 
 @app.get("/")
@@ -195,8 +318,26 @@ def state(session=Depends(get_session)):
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest, session=Depends(get_session)):
+def chat(
+    payload: ChatRequest,
+    request: Request,
+    session=Depends(get_session),
+):
+    # FIX (deploy-ready, item 4): one visitor cannot flood the shared demo.
+    client_ip = getattr(request.state, "client_ip", "unknown")
+    if not chat_limiter.allow(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": (
+                    "You are sending messages faster than the demo allows. "
+                    "Wait a minute and try again."
+                )
+            },
+        )
     with session.lock:
+        # FIX (deploy-ready, item 3): charge this turn's live calls to this IP.
+        session.agent.set_client_ip(client_ip)
         state_before = session.agent.export_state()
         pending = state_before.get("pending")
         message = payload.message.strip()
@@ -222,7 +363,9 @@ def chat(payload: ChatRequest, session=Depends(get_session)):
             response,
             pending_data=pending_data,
             conflicts=conflicts,
-            has_key=llm_status() == "live",
+            # "capped" still means a key exists; only "offline" means there is
+            # no key at all.
+            has_key=llm_status() != "offline",
         )
         mapped["saved_plan_id"] = confirmed_plan_id
         return mapped
@@ -404,6 +547,33 @@ def checkin(payload: CheckinRequest, session=Depends(get_session)):
             "ok": True,
             "checkin_id": result["data"].get("checkin_id"),
         }
+
+
+@app.post("/demo/reset", response_model=OkResponse)
+def demo_reset(request: Request):
+    """FIX (deploy-ready, item 5): reseed the shared demo student.
+
+    Rate-limited to 3 per hour per IP. Clears every session agent as well, so
+    no browser keeps a plan that no longer exists in SQLite.
+    """
+    client_ip = getattr(request.state, "client_ip", "unknown")
+    if not reset_limiter.allow(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": (
+                    "The demo was reset recently. Please try again in a "
+                    "little while."
+                )
+            },
+        )
+    registry.reset()
+    summary = reset_demo_data()
+    return {
+        "ok": True,
+        "reply": "Demo data was reseeded. All plans were cleared.",
+        "status": "seeded" if summary.get("seeded") else "unchanged",
+    }
 
 
 if __name__ == "__main__":

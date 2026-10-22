@@ -237,6 +237,15 @@ class CampusPilotAgent:
         self._finish_reply(reply)
         return AgentResponse(reply_text=reply, tool_calls=trace)
 
+    def set_client_ip(self, client_ip: str) -> None:
+        """FIX (deploy-ready, item 3): tag this turn for the live-AI budget.
+
+        Purely advisory: the offline/fake clients simply have no such
+        attribute, so nothing else changes.
+        """
+        if hasattr(self._llm, "client_ip"):
+            self._llm.client_ip = client_ip
+
     def export_state(self) -> dict[str, Any]:
         """JSON-serializable session state for ``st.session_state``."""
         self._state["seen_ids"] = self._seen.to_list()

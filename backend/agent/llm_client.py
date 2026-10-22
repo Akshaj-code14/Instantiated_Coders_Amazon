@@ -22,6 +22,7 @@ from google import genai
 from google.genai import errors, types
 
 from agent.config import AgentConfig, load_config
+from agent.live_budget import budget
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,19 @@ class LLMUnavailableError(RuntimeError):
         # the UI shows `str(exc)` and keeps this for the live check / logs.
         self.detail = detail
         self.user_message = _FRIENDLY_UNAVAILABLE
+
+
+class LiveLimitReached(LLMUnavailableError):
+    """FIX (deploy-ready, item 3): the live-AI budget is spent.
+
+    Subclasses ``LLMUnavailableError`` so the controller takes its normal
+    fallback path; the class name is what the API layer turns into the
+    "Live AI limit reached; using fallback mode." notice.
+    """
+
+    def __init__(self, message: str, *, scope: str = "budget") -> None:
+        super().__init__(message, retryable=False)
+        self.scope = scope
 
 
 def _api_error_detail(exc: errors.APIError) -> str:
@@ -182,6 +196,9 @@ class GeminiLLMClient:
         self.config = config or load_config()
         self._sleep = sleep or time.sleep
         self._client = client
+        # FIX (deploy-ready, item 3): set per turn by the server so the shared
+        # budget can be split per visitor. Never used for anything else.
+        self.client_ip: str = "unknown"
 
     # -- client construction -------------------------------------------
 
@@ -234,6 +251,14 @@ class GeminiLLMClient:
         last_error: LLMUnavailableError | None = None
 
         for attempt in range(attempts):
+            # FIX (deploy-ready, item 3): every *real* request is charged here,
+            # retries included. When the cap is spent we stop before calling
+            # Gemini and let the controller answer from quick mode.
+            refused = budget.acquire(self.client_ip)
+            if refused is not None:
+                raise LiveLimitReached(
+                    f"live AI {refused} limit reached", scope=refused
+                )
             try:
                 response = client.models.generate_content(
                     model=self.config.gemini_model,

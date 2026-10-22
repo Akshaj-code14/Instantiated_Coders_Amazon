@@ -846,6 +846,9 @@
           <i class="w-3.5 h-3.5" data-lucide="sparkles"></i>
           <span>New Plan</span>
         </button>
+        <!-- FIX (deploy-ready, item 5): every visitor shares one demo student, so a
+             visitor can reseed the demo data (rate-limited server-side). -->
+        <button type="button" id="resetDemoBtn" class="px-2.5 py-1.5 rounded-lg text-[11px] text-slate-400 hover:text-white hover:bg-white/5 border border-white/10" title="Reseed the shared demo data (clears plans and check-ins for everyone)">Reset demo</button>
         <button class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300" id="themeToggleBtn" title="Toggle theme">
           <i class="w-4 h-4 text-amber-300" data-lucide="sun" id="themeIcon"></i>
         </button>
@@ -2295,6 +2298,27 @@
     document.querySelectorAll('.quick-prompt-btn').forEach(btn => {
       btn.addEventListener('click', () => sendMessage(btn.textContent.trim().replace(/^[^\w\s]+/, '').trim()));
     });
+
+    /* FIX (deploy-ready, item 5): reseed the shared demo data from the UI. */
+    const resetDemoBtn = document.getElementById('resetDemoBtn');
+    if (resetDemoBtn) {
+      resetDemoBtn.addEventListener('click', async () => {
+        const ok = window.confirm('Reset the shared demo data for everyone? Plans and check-ins will be cleared.');
+        if (!ok) return;
+        resetDemoBtn.disabled = true;
+        try {
+          await callApi('/demo/reset', {});
+          currentProposal = null;
+          closeModal();
+          await loadState();
+          showToast('Demo data reset', 'ok');
+        } catch (err) {
+          showToast(err.message || 'The demo could not be reset.', 'error');
+        } finally {
+          resetDemoBtn.disabled = false;
+        }
+      });
+    }
 
     // ---------- task cards: complete, postpone, edit duration ----------
     function refreshProgress() {

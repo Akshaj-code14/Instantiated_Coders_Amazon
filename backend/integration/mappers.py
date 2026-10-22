@@ -253,6 +253,11 @@ def friendly_notice(
 ) -> str | None:
     if not used_fallback:
         return None
+    # FIX (deploy-ready, item 3): a spent live-AI budget is expected, not an
+    # error. Say so plainly and keep the turn in quick mode. The controller
+    # passes the exception text, so match both the class name and its wording.
+    if "LiveLimitReached" in (error or "") or "limit reached" in (error or "").lower():
+        return "Live AI limit reached; using fallback mode."
     lowered = (error or "").lower()
     if not has_key:
         return "Live AI is off (no GEMINI_API_KEY); quick mode is handling this turn."
