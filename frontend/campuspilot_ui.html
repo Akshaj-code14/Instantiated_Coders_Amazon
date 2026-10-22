@@ -686,6 +686,16 @@
   .cp-pomo-hint{display:none;margin-top:8px;text-align:center;font-size:10px;line-height:1.4;color:rgb(var(--cp-grid));opacity:.85}
   .cp-pomo-hint.cp-show{display:block}
 
+  /* Alexa+ simulated mode: a generic listening ring, no vendor assets. */
+  #alexaModeBtn{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:9px;font-size:11px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#cbd5e1;cursor:pointer}
+  #alexaModeBtn.cp-on{background:rgb(var(--cp-glow) / .22);border-color:rgb(var(--cp-glow) / .6);color:rgb(var(--cp-grid))}
+  #alexaModeBtn:focus-visible,#alexaTalkBtn:focus-visible{outline:2px solid rgb(var(--cp-glow));outline-offset:2px}
+  #alexaTalkBtn{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700;border:1px solid rgb(var(--cp-glow) / .45);background:rgb(var(--cp-glow) / .16);color:rgb(var(--cp-grid));cursor:pointer}
+  #alexaTalkBtn:hover{background:rgb(var(--cp-glow) / .3)}
+  .alexa-ring{width:10px;height:10px;border-radius:9999px;border:2px solid rgb(var(--cp-glow));opacity:.4;display:inline-block;flex:none}
+  .alexa-ring.cp-listening{opacity:1;animation:alexaRingPulse 1.35s ease-out infinite}
+  @keyframes alexaRingPulse{0%{box-shadow:0 0 0 0 rgb(var(--cp-glow) / .5)}100%{box-shadow:0 0 0 12px rgb(var(--cp-glow) / 0)}}
+
   /* Header pill: visible only when the window is closed and a timer runs. */
   .cp-pomo-pill{
     display:none; align-items:center; gap:7px; padding:7px 11px; border-radius:11px;
@@ -1329,6 +1339,10 @@
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button id="alexaModeBtn" type="button" aria-pressed="false" aria-label="Toggle simulated Alexa+ voice mode" title="Alexa+ (simulated)">
+                <i class="w-3.5 h-3.5" data-lucide="audio-lines"></i>
+                <span>Alexa+ (simulated)</span>
+              </button>
               <select class="bg-white/5 border border-white/10 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none cursor-pointer" id="languageSelect">
                 <option class="bg-slate-900 text-slate-200" value="en">English (US)</option>
                 <option class="bg-slate-900 text-slate-200" value="te">Telugu (తెలుగు)</option>
@@ -1338,6 +1352,15 @@
                 <i class="w-4 h-4" data-lucide="volume-2" id="speakerIcon"></i>
               </button>
             </div>
+          </div>
+          <!-- FIX: Alexa+ is a local simulation, never a live Alexa/MCP integration. -->
+          <div class="px-4 py-2 border-b border-white/5 bg-black/10 flex flex-wrap items-center gap-2 text-[11px] text-slate-300" id="alexaBar">
+            <span class="alexa-ring" id="alexaRing" aria-hidden="true"></span>
+            <button id="alexaTalkBtn" type="button" aria-label="Talk to CampusPilot in simulated Alexa+ mode">
+              <i class="w-3 h-3" data-lucide="mic"></i><span>Talk</span>
+            </button>
+            <span class="font-semibold" id="alexaState">Alexa+ simulated · Off</span>
+            <span class="text-slate-400">Simulated Alexa+ experience. Not connected to a real Alexa service.</span>
           </div>
           <!-- Chat Message Log -->
           <div class="flex-1 p-4 lg:p-6 overflow-y-auto space-y-4 max-h-[460px]" id="chatMessageLog">
@@ -1991,12 +2014,73 @@
     let speakReplies = true;
     speakerBtn.setAttribute('aria-pressed', 'true');
 
+    /* FIX: Alexa+ is a UI simulation of a voice-first assistant. It uses the
+       browser SpeechRecognition/speechSynthesis already in this page and the
+       real /chat endpoint; there is no Alexa, Amazon or MCP integration. */
+    const alexaModeBtn = document.getElementById('alexaModeBtn');
+    const alexaTalkBtn = document.getElementById('alexaTalkBtn');
+    const alexaState = document.getElementById('alexaState');
+    const alexaRing = document.getElementById('alexaRing');
+    /* FIX: the wake phrase "Alexa, ask CampusPilot to ..." is stripped; "to" is optional
+       so "Alexa, ask CampusPilot what ..." also strips cleanly. */
+    const ALEXA_WAKE = /^\s*(?:hey\s+)?alexa\s*,?\s*(?:ask\s+)?campus\s*pilot\s+(?:to\s+)?/i;
+    let alexaSendTimer = null;
+    let lastAlexaTranscript = '';
+
+    function stripAlexaWake(text) {
+      return String(text || '').replace(ALEXA_WAKE, '').trim();
+    }
+    function alexaModeOn() {
+      return Boolean(window.cpUI && window.cpUI.get().voice.alexa);
+    }
+    function applyAlexaMode() {
+      const on = alexaModeOn();
+      if (alexaModeBtn) {
+        alexaModeBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        alexaModeBtn.classList.toggle('cp-on', on);
+      }
+      const input = document.getElementById('chatInput');
+      if (input) {
+        if (!input.dataset.basePlaceholder) input.dataset.basePlaceholder = input.placeholder;
+        input.placeholder = on
+          ? 'Alexa, ask CampusPilot to plan my next two days — or type any request'
+          : input.dataset.basePlaceholder;
+      }
+      if (alexaState) {
+        if (isListening) alexaState.textContent = 'Alexa+ simulated · Listening…';
+        else if (!on) alexaState.textContent = 'Alexa+ simulated · Off';
+        else if (!SpeechRec) alexaState.textContent = 'Alexa+ simulated · Text mode (mic unsupported)';
+        else alexaState.textContent = 'Alexa+ simulated · Ready';
+      }
+    }
+    function setAlexaMode(on) {
+      if (window.cpUI) window.cpUI.set('voice.alexa', Boolean(on));
+      applyAlexaMode();
+    }
+    if (alexaModeBtn) alexaModeBtn.addEventListener('click', () => setAlexaMode(!alexaModeOn()));
+    if (alexaTalkBtn) alexaTalkBtn.addEventListener('click', () => {
+      if (!alexaModeOn()) setAlexaMode(true);
+      micBtn.click();
+    });
+    document.addEventListener('campuspilot:ui', (event) => {
+      const path = (event.detail && event.detail.path) || '';
+      if (path === '*' || path.indexOf('voice') === 0) applyAlexaMode();
+    });
+    applyAlexaMode();
+    window.addEventListener('load', applyAlexaMode);
+
     function setListeningUI(on) {
       isListening = on;
       micBtn.classList.toggle('animate-mic-pulse', on);
       micBtn.classList.toggle('bg-rose-500/30', on);
       micBtn.classList.toggle('text-rose-400', on);
       micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (alexaRing) alexaRing.classList.toggle('cp-listening', on);
+      if (alexaState) {
+        alexaState.textContent = on
+          ? 'Alexa+ simulated · Listening…'
+          : (alexaModeOn() ? 'Alexa+ simulated · Ready' : 'Alexa+ simulated · Off');
+      }
     }
 
     micBtn.addEventListener('click', () => {
@@ -2030,8 +2114,23 @@
         }
         chatInput.value = (finalText || interim).trim();
         if (window.cpChat) { window.cpChat.autoGrow(); window.cpChat.syncSendState(); }
+        /* FIX: in simulated Alexa+ mode a final utterance is sent for you. */
+        if (alexaModeOn() && finalText.trim() && finalText.trim() !== lastAlexaTranscript) {
+          const spoken = finalText.trim();
+          if (alexaSendTimer) clearTimeout(alexaSendTimer);
+          alexaSendTimer = setTimeout(() => {
+            if (!alexaModeOn() || isSending) return;
+            lastAlexaTranscript = spoken;
+            sendMessage(spoken);
+          }, 300);
+        }
       };
-      try { recognition.start(); } catch (err) { setListeningUI(false); }
+      try { recognition.start(); } catch (err) {
+        // FIX: a headless/locked-down browser can throw from start(); say so instead of going quiet.
+        setListeningUI(false);
+        if (alexaModeOn() && alexaState) alexaState.textContent = 'Alexa+ simulated · Mic unavailable — type instead';
+        showToast('Voice input could not start in this browser. Type your message instead.', 'err');
+      }
     });
 
     /* Settings own the voice language; the header select is the fallback. */
@@ -2066,13 +2165,17 @@
     });
 
     function speak(text) {
-      if (!spokenRepliesOn() || !voiceToggle.checked || !window.speechSynthesis) return;
+      if (!window.speechSynthesis) return;
+      /* FIX: simulated Alexa+ is voice-first, so its replies are always spoken. */
+      if (!alexaModeOn() && (!spokenRepliesOn() || !voiceToggle.checked)) return;
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = voiceLang();
       if (window.cpUI) u.rate = Number(window.cpUI.get().voice.rate) || 1;
       speechSynthesis.speak(u);
     }
+
+    window.cpAlexa = { stripWake: stripAlexaWake, isOn: alexaModeOn, set: setAlexaMode };
 
     // ---------- camera toggle (off by default, nothing is recorded here) ----------
     const cameraToggle = document.getElementById('cameraToggle');
@@ -2134,6 +2237,8 @@
 
     async function sendMessage(text, isRetry) {
       text = (text || '').trim();
+      /* FIX: the wake phrase is a UI wrapper, never part of the agent prompt. */
+      if (alexaModeOn()) text = stripAlexaWake(text);
       if (!text || isSending) return;
       isSending = true;
       chatSubmitBtn.classList.add('burst-active');
@@ -2720,7 +2825,7 @@
       grid: { mode: 'default', intensity: 60 },
       cursor: { on: true, size: 28, strength: 0.4, blend: 'exclusion', shape: 'circle' },
       pomodoro: { focus: 25, short: 15, long: 25, rounds: 4, autoStart: false, sound: true, notify: true },
-      voice: { lang: 'en-IN', readAloud: false, rate: 1 },
+      voice: { lang: 'en-IN', readAloud: false, rate: 1, alexa: false },
       a11y: { reducedMotion: false, largeText: false, contrast: false, cameraOff: true },
       prefs: { target: 4.5, start: '09:00', end: '22:00', maxFocus: 90, break: 15 },
       leaves: { on: true, density: 'medium' },
