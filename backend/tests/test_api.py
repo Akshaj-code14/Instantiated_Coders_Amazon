@@ -111,6 +111,30 @@ def test_cancel_discards_pending(client):
     assert client.get("/state").json()["pending_plan"] is None
 
 
+def test_cancel_keeps_an_existing_active_plan_intact(client):
+    """FIX (item 4): cancelling a fresh proposal must not touch the plan
+    that is already active."""
+    first = client.post(
+        "/chat", json={"message": "Plan my next two days"}
+    ).json()["proposed_plan"]
+    active_id = client.post("/plan/save", json={"plan": first}).json()["plan_id"]
+
+    second = client.post(
+        "/chat", json={"message": "Plan my next two days again"}
+    ).json()["proposed_plan"]
+    assert second and second["plan_id"] != active_id
+
+    assert client.post("/plan/cancel", json={}).status_code == 200
+
+    state = client.get("/state").json()
+    assert state["active_plan"]["plan_id"] == active_id
+    assert state["pending_plan"] is None
+    assert _count(
+        "SELECT COUNT(*) FROM plans WHERE student_id = ? AND status = 'active'",
+        (STUDENT,),
+    ) == 1
+
+
 def test_save_chat_with_nothing_pending_is_honest(client):
     response = client.post("/chat", json={"message": "Save my plan"})
     assert response.status_code == 200

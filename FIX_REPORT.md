@@ -185,3 +185,31 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
   `pytest.importorskip("streamlit")` before the `agent.manual_app` import.
   Re-proved: 127 passed / 1 skipped on the clean clone; **138 passed** in the
   full dev venv (Python 3.11) where `requirements-manual.txt` is installed.
+
+---
+
+## Item 4 — TESTS
+
+- **Baseline:** `python -m pytest -q` → **138 passed** before any test edit
+  (offline: `backend/tests/conftest.py` forces `GEMINI_API_KEY=""`; Python
+  **3.11.15** in `.venv311`).
+- **Real failure found & fixed (minimal):** a clean install could not even
+  collect `backend/tests/test_manual_app.py` (`ModuleNotFoundError: streamlit`
+  — Streamlit is an optional extra). Fixed in the item-3 proof commit with
+  `pytest.importorskip("streamlit")` ahead of the `agent.manual_app` import;
+  no assertions changed, nothing skipped in the full dev install.
+- **New tests added — 2 (limit was 3):**
+  1. `backend/tests/test_alexa_wake.py::test_alexa_wake_phrase_is_stripped_before_chat`
+     — extracts `ALEXA_WAKE` from the shipped `frontend/campuspilot_ui.html`,
+     asserts `"Alexa, ask CampusPilot to plan my next two days"` →
+     `"plan my next two days"`, that a plain message is untouched, that
+     `sendMessage` actually applies the strip, and that the honesty disclaimer
+     is present.
+  2. `backend/tests/test_api.py::test_cancel_keeps_an_existing_active_plan_intact`
+     — save a plan, propose a second one, cancel it, assert the active
+     `plan_id` is unchanged, pending is cleared and exactly 1 active row
+     remains.
+- **Coverage check first:** "save with nothing pending is rejected" already
+  existed (`test_save_is_server_side_and_guarded` asserts `409`), so no third
+  test was needed.
+- **Suite after item 4:** `python -m pytest -q` → **140 passed**.
