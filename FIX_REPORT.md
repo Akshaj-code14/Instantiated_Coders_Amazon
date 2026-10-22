@@ -214,6 +214,25 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
   test was needed.
 - **Suite after item 4:** `python -m pytest -q` → **140 passed**.
 
+### `backend/services/seed_data.py` — date-dependent failure (found on re-run)
+
+- **Why:** re-running the whole suite on **Friday 2026-10-23** gave
+  `1 failed, 139 passed`: `test_seed.py::test_seeded_deadlines_are_plan_able`
+  saw **4** plan-able deadlines instead of **5**. Root cause is in the seed, not
+  the test: `quiz_due = _next_weekday(today, 4)` is "next Friday", which on a
+  Friday is **7 days + 14:00** away, i.e. just past the 7-day horizon the agent
+  asks the backend for (`days_ahead or 7`), so the Networks Quiz silently
+  disappeared from the demo plan. `java_due` (Sunday) has the same edge on a
+  Sunday. Nothing in items 1–3 touched this; it is a pre-existing
+  weekday-dependent bug that only shows up on one day of the week.
+- **Before:** `quiz_due`/`java_due` could sit 7 days + clock-time out;
+  `get_upcoming_deadlines(days_ahead=7)` returned 4 rows on a Friday.
+- **After:** if the resolved day is more than 6 days out, the deadline is
+  re-seeded to `today+3` (quiz, 14:00) / `today+5` (Java, 23:59) so every seeded
+  deadline is always inside the window the agent actually reads. Seed-only
+  change, 4 added lines + comment, no test weakened, no assertion changed.
+- **Ran after the fix:** `python -m pytest -q` → **140 passed**;
+
 ---
 
 ## Item 5 — SUBMISSION AIDS (docs only)

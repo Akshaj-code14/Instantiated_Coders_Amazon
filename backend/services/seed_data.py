@@ -94,6 +94,15 @@ def seed_demo(db_path: str | Path | None = None, now: datetime | None = None) ->
     lab_due = _at(tomorrow, "11:00")
     quiz_due = _at(_next_weekday(today, 4), "14:00")      # Friday
     java_due = _at(_next_weekday(today, 6), "23:59")      # Sunday
+    # FIX (code freeze, item 4): when today *is* the target weekday,
+    # "next weekday" lands a full 7 days out plus the clock time, which is just
+    # past the 7-day planning horizon -- the deadline silently dropped out of
+    # the demo plan and test_seed failed on Fridays (and Sundays). Keep every
+    # seeded deadline inside the window the agent actually looks at.
+    if (quiz_due.date() - today).days > 6:
+        quiz_due = _at(today + timedelta(days=3), "14:00")
+    if (java_due.date() - today).days > 6:
+        java_due = _at(today + timedelta(days=5), "23:59")
 
     tasks = [
         ("task_demo_dbms_lab", "DBMS Lab Submission", lab_due, 90, "high",
