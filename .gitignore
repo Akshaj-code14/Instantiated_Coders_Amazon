@@ -9,6 +9,10 @@ __pycache__/
 .venv311/
 
 # Runtime artifacts — the database is created and seeded on first run.
+# FIX: blanket patterns too, so a stray database anywhere stays untracked.
+*.db
+*.db-wal
+*.db-shm
 backend/data/*.db
 backend/data/*.db-wal
 backend/data/*.db-shm

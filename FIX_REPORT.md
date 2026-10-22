@@ -103,3 +103,65 @@ user bubble showed the stripped text, proposal modal opened, and
   "[MOVED] Badminton Practice", "AI Proposed Slot") remain in the DOM.
 
 **Suite after item 2:** `python -m pytest -q` → **138 passed**.
+
+---
+
+## Item 3 — REPO READINESS
+
+### `LICENSE` (new at root)
+- **Why:** submission requires an MIT license with a team-approved copyright.
+- **Before:** no license file. **After:** standard MIT text with
+  `Copyright (c) 2026 <TEAM NAME - I WILL CONFIRM>`.
+- **⚠ TEAM ACTION:** the team must approve/replace that placeholder before
+  submission. This file is not final until they do.
+
+### `.gitignore`
+- **Why:** `*.db` / `*.db-wal` / `*.db-shm` were only ignored under
+  `backend/data/`; a database written anywhere else (e.g. a temp path or a
+  copy) could be staged by accident.
+- **Before:** `.env`, `.venv*/`, `__pycache__/`, `backend/data/*.db*`.
+- **After:** same, plus blanket `*.db`, `*.db-wal`, `*.db-shm` (marked
+  `# FIX:`).
+
+### `.env.example`
+- Already present with placeholders only (`GEMINI_API_KEY=` empty, commented
+  notes, no real values). Unchanged.
+
+### `README.md` (rewritten)
+- **Why:** the old README described a different layout (`cd campuspilot`) and
+  had not been proven.
+- **Before:** stale paths, no track statement, no honest planned-vs-working
+  split, no team placeholders.
+ **After:** pitch, honest Alexa+ simulated track statement, features that work
+  vs planned, architecture (`Browser → FastAPI → Agent → Backend → SQLite`),
+  Windows + Mac/Linux setup, env-var table (what happens with no Gemini key),
+  run, tests, demo prompts, limitations (Gemini free-tier quota), license with
+  the approval note, team placeholders. Every command in it is one that was
+  actually run (see the fresh-clone proof below).
+
+### Secret / artifact scan (ran)
+- `git ls-files | grep -Ei "\.env|\.db|screenshot"` → only `.env.example`
+  (placeholders). No `.env`, `.db`, WAL/SHM or screenshot is tracked.
+- Key patterns (`AIza…`, `sk-…`, `ghp_…`, `github_pat_…`, `AKIA…`, `xox…`,
+  `glpat-`, PEM headers) scanned over (a) tracked files, (b) the whole working
+  tree including untracked files, (c) **every commit in git history** → **zero
+  matches**.
+- Local-only note (untracked, git-ignored, values not printed):
+  `.env:1` has a non-empty `GEMINI_API_KEY` (53 chars, does **not** match any
+  scanned key pattern); `backend/.env:1` is empty. `.env` and `backend/.env`
+  are both ignored, so nothing is committed.
+
+### Stray files — LISTED FOR REVIEW ONLY, nothing deleted
+- `backend/.env` — local env copy (ignored, empty key).
+- `backend/data/campuspilot.db` (+ WAL/SHM if present) — local runtime DB (ignored).
+- `screenshot-dashboard-live.png`, `screenshot-grid.png`, `screenshot-pomodoro.png`,
+  `screenshot-pomodoro2.png` — local captures (ignored by `screenshot-*.png`).
+- `tests/` (repo root) — contains only `__pycache__`, a leftover from before
+  the suite moved to `backend/tests` (`pytest.ini` points at `backend/tests`).
+- `requirements-agent.txt`, `requirements-manual.txt` — extra requirement sets
+  for the standalone agent/manual scripts; tracked, kept.
+- `backend/agent/manual_app.py`, `backend/agent/mock_backend.py`,
+  `backend/agent/demo.py`, `backend/agent/live_check.py` — standalone/demo
+  entry points covered by their own tests; tracked, kept.
+- No `Backend_old/` and no `check_db.py` exist in the tree, and `git log
+  --all --diff-filter=A` shows they were **never** committed.
