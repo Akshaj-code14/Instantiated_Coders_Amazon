@@ -34,7 +34,14 @@ def _count(sql: str, params: tuple = ()) -> int:
 def test_health_root_and_state(client):
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json() == {"status": "ok", "llm": "offline", "db": "ok"}
+    # FIX (deploy-ready, item 3): /health now reports the live-AI budget and
+    # must never expose the key (there is none in this offline suite anyway).
+    body = health.json()
+    assert body["status"] == "ok"
+    assert body["llm"] == "offline"
+    assert body["db"] == "ok"
+    assert isinstance(body["live_calls_remaining"], int)
+    assert body["live_calls_remaining"] >= 0
 
     root = client.get("/")
     assert root.status_code == 200
