@@ -482,8 +482,9 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   **145 passed, 1 skipped**, and the server started exactly as the container
   does (`uvicorn server:app --host 0.0.0.0 --port $PORT`, key unset) served
   `/health` (offline, 15 left), `GET /` 200 HTML and a seeded 6-task `/state`.
-- Commits on `deploy-ready`: `8296545`, `79a6b1c`, `35a9196`, `a583893`.
-  No push, `main` untouched.
+- Seven local commits on `deploy-ready`, the last being this evidence update.
+  No push, `main` untouched; the branch starts at `0924d07`
+  (`submission-fixes`).
 
 ## What could not be verified here
 - A real cloud deployment (no host account, no push): the URL is still
