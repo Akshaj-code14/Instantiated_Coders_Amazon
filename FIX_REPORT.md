@@ -252,3 +252,59 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1
   or metrics were invented; screenshots/media are marked TEAM TO FILL.
 
 **Suite after item 5 (docs only):** `python -m pytest -q` → **140 passed**.
+
+---
+
+## Final status
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| 1 — Alexa+ simulated track | **PASS** | Live browser run: toggle → placeholder/status change; typed `Alexa, ask CampusPilot to plan my next two days` and intercepted the fetch body → `{"message":"plan my next two days"}` (wake stripped before display *and* before `/chat`); reply card rendered, `speechSynthesis.speaking === true`; ring computed style `alexaRingPulse 1.35s`; disclaimer string present. Source + `docs/alexa_simulation.md`; unit test `test_alexa_wake.py`. |
+| 2 — real path | **PASS** | `USE_MOCK = false`, `API_BASE = window.location.origin`; HTTP script **11/11 PASS** (0 saved → confirm 1 active → second confirm `409` → cancel keeps same `plan_id` → unknown-plan save `409` → no traceback); server restart returns the same active plan; browser refresh shows *Active plan synced*; with the server stopped, Confirm shows an error toast and **no** success; fallback badge verified offline **and** on a live-key-that-fails server (`used_fallback: true`, friendly notice); sample strings absent from the DOM after load. |
+| 3 — repo readiness | **PASS** (team must approve the LICENSE line) | `LICENSE` (MIT, `<TEAM NAME - I WILL CONFIRM>`), `.gitignore` now ignores `.env`/`*.db*`/`.venv*`/`__pycache__`, `git ls-files` shows only `.env.example`, secret scan over tree + **all commits** → 0 matches, stray files listed (nothing deleted), README rewritten from commands actually run, fresh clone in `$TEMP/campuspilot-proof` → venv → install → `127 passed, 1 skipped` → server `/health` ok, `/state` 6 tasks, `/` 200 text/html, seed idempotent. |
+| 4 — tests | **PASS** | Baseline **138 passed**; one real failure fixed (`streamlit` collection crash on a clean install via `pytest.importorskip`); 2 new tests added (limit 3); final **140 passed** offline on Python 3.11.15. |
+| 5 — submission aids | **PASS** (docs) / **UNVERIFIED** (reset scripts not run) | `docs/demo_script.md` (2:40), `docs/devpost_draft.md` (no invented claims), `scripts/reset_demo.ps1` + `.sh` created — **syntax-checked only** (`bash -n` OK; PowerShell parser 0 errors) and deliberately **not executed**, per "ask before running". |
+
+### Exact commands run
+
+```bash
+# branch safety
+git tag pre-freeze-backup && git checkout -b submission-fixes
+
+# test suite (before every item, after every item)
+./.venv311/Scripts/python.exe -m pytest -q          # 138 -> 138 -> 138 -> 140 -> 140
+
+# servers used for verification (temp DBs, offline)
+cd backend
+GEMINI_API_KEY="" CAMPUSPILOT_DB="$TEMP/cp_freeze/ui.db"  ../.venv311/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8010
+GEMINI_API_KEY="" CAMPUSPILOT_DB="$TEMP/cp_freeze/http.db" ../.venv311/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8011
+GEMINI_API_KEY="bogus-test-key-for-fallback-check" CAMPUSPILOT_DB="$TEMP/cp_freeze/liveish.db" ../.venv311/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8012
+curl http://127.0.0.1:8011/health   # {"status":"ok","llm":"offline","db":"ok"}
+curl http://127.0.0.1:8011/state
+# plus an inline python/urllib script driving /chat -> /plan/save -> /plan/cancel
+# against http://127.0.0.1:8011 while counting `plans.status='active'` in SQLite.
+
+# fresh-clone proof
+git clone -b submission-fixes . "$TEMP/campuspilot-proof"
+cd "$TEMP/campuspilot-proof" && python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+cp .env.example .env
+.venv/Scripts/python.exe -m pytest -q                # 127 passed, 1 skipped (Py 3.14)
+cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8000
+curl http://127.0.0.1:8000/health && curl http://127.0.0.1:8000/state
+../.venv/Scripts/python.exe -m services.seed_data    # idempotent
+
+# submission aids checks
+bash -n scripts/reset_demo.sh                       # syntax OK (not executed)
+# PowerShell Parser::ParseInput on reset_demo.ps1  -> 0 errors (not executed)
+```
+
+### Remaining biggest risk
+
+**The live-AI path is only verified with an invalid key.** No real Gemini key
+was used (and none may be printed), so a genuine `GEMINI_API_KEY` during
+judging could behave differently — free-tier quota (`429` / `resource_exhausted`)
+or a model-side change mid-demo. Mitigation that *was* verified: every failed
+turn falls back to quick mode, the UI flips its **Fallback mode · quick reply**
+badge, and the notice text stays friendly. Run the demo with the key removed
+to be deterministic.
