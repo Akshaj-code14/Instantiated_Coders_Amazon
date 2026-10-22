@@ -17,8 +17,8 @@ import os
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
-from backend.database import get_connection, init_db, transaction
-from backend.timeutil import IST, now_ist, to_iso
+from services.database import get_connection, init_db, transaction
+from services.timeutil import IST, now_ist, to_iso
 
 DEMO_STUDENT_ID = "student_demo"
 DEMO_STUDENT_NAME = "Aditya Verma"

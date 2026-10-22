@@ -14,9 +14,9 @@ configured focus limit and the break between sessions.
 
 from datetime import datetime, time, timedelta
 
-from backend.database import get_connection, transaction
-from backend.ids import new_id
-from backend.timeutil import IST, now_ist, require_aware, to_iso, to_ist
+from services.database import get_connection, transaction
+from services.ids import new_id
+from services.timeutil import IST, now_ist, require_aware, to_iso, to_ist
 
 STEP_MINUTES = 15
 CONFLICT_LOOKBACK_MINUTES = 30

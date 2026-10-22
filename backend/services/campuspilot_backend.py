@@ -5,26 +5,26 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
-from backend.database import get_connection, transaction
-from backend.timeutil import now_ist, require_aware, to_iso, to_ist
-from backend.task_service import create_task as service_create_task
-from backend.task_service import update_task as service_update_task
-from backend.schedule_service import get_schedule as service_get_schedule
+from services.database import get_connection, transaction
+from services.timeutil import now_ist, require_aware, to_iso, to_ist
+from services.task_service import create_task as service_create_task
+from services.task_service import update_task as service_update_task
+from services.schedule_service import get_schedule as service_get_schedule
 # INTEGRATION: F1/F3 (Phase 2b) -- use the detailed planner/replanner results
 # so the adapter can return blocks, warnings, conflicts and a diff.
-from backend.planner import (
+from services.planner import (
     create_plan_with_details as service_create_plan_with_details,
     detect_deadline_conflicts,
 )
-from backend.replanner import (
+from services.replanner import (
     replan_schedule_with_details as service_replan_schedule_with_details,
 )
-from backend.notice_service import search_notices as service_search_notices
-from backend.checkin_service import log_checkin as service_log_checkin
-from backend.wellbeing_service import (
+from services.notice_service import search_notices as service_search_notices
+from services.checkin_service import log_checkin as service_log_checkin
+from services.wellbeing_service import (
     get_wellbeing_support as service_get_wellbeing_support,
 )
-from backend.ids import new_id
+from services.ids import new_id
 
 
 def _execute(

@@ -14,8 +14,8 @@ class CampusPilotBackendTests(unittest.TestCase):
         self.previous_db = os.environ.get("CAMPUSPILOT_DB")
         os.environ["CAMPUSPILOT_DB"] = str(self.db_path)
 
-        from backend.database import get_connection, init_db, transaction
-        from backend.timeutil import now_ist, to_iso
+        from services.database import get_connection, init_db, transaction
+        from services.timeutil import now_ist, to_iso
 
         self.get_connection = get_connection
         self.transaction = transaction
@@ -78,7 +78,7 @@ class CampusPilotBackendTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def make_plan(self, task_id, start):
-        from backend.campuspilot_backend import create_plan
+        from services.campuspilot_backend import create_plan
 
         result = create_plan(
             student_id=self.student_id,
@@ -115,7 +115,7 @@ class CampusPilotBackendTests(unittest.TestCase):
             self.assertIn(table, table_names)
 
     def test_backend_response_format(self):
-        from backend.campuspilot_backend import get_student_context
+        from services.campuspilot_backend import get_student_context
 
         result = get_student_context(
             student_id="student_does_not_exist"
@@ -138,7 +138,7 @@ class CampusPilotBackendTests(unittest.TestCase):
         self.assertEqual(self.get_plan_status(plan_id), "proposed")
 
     def test_confirmed_plan_becomes_active(self):
-        from backend.campuspilot_backend import save_plan
+        from services.campuspilot_backend import save_plan
 
         start = (
             self.now_ist() + timedelta(days=1)
@@ -168,7 +168,7 @@ class CampusPilotBackendTests(unittest.TestCase):
         self.assertTrue(all(item["status"] == "scheduled" for item in items))
 
     def test_confirming_new_plan_supersedes_previous_active_plan(self):
-        from backend.campuspilot_backend import save_plan
+        from services.campuspilot_backend import save_plan
 
         start_one = (
             self.now_ist() + timedelta(days=1)
@@ -198,7 +198,7 @@ class CampusPilotBackendTests(unittest.TestCase):
         self.assertEqual(self.get_plan_status(second_plan), "active")
 
     def test_fixed_event_is_preserved_and_not_overlapped(self):
-        from backend.campuspilot_backend import create_plan
+        from services.campuspilot_backend import create_plan
 
         start = (
             self.now_ist() + timedelta(days=1)

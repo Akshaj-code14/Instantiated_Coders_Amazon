@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from backend.database import get_connection
+from services.database import get_connection
 
 
 def _client(tmp_path, monkeypatch):

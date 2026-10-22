@@ -19,15 +19,15 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-import backend.campuspilot_backend as backend
+import services.campuspilot_backend as backend
 from agent.config import load_config
 from agent.controller import CampusPilotAgent
 from agent.llm_client import GeminiLLMClient, LLMUnavailableError
-from backend.database import get_connection, init_db, transaction
-from backend.planner import detect_deadline_conflicts
-from backend.seed_data import DEMO_STUDENT_ID as SEEDED_STUDENT_ID
-from backend.seed_data import seed_demo
-from backend.timeutil import IST, now_ist, to_iso, to_ist
+from services.database import get_connection, init_db, transaction
+from services.planner import detect_deadline_conflicts
+from services.seed_data import DEMO_STUDENT_ID as SEEDED_STUDENT_ID
+from services.seed_data import seed_demo
+from services.timeutil import IST, now_ist, to_iso, to_ist
 from integration.mappers import diff_between, plan_items_from_rows
 
 logger = logging.getLogger(__name__)

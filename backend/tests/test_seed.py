@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from backend.database import get_connection
-from backend.seed_data import DEMO_STUDENT_ID, seed_demo
-from backend.timeutil import now_ist
+from services.database import get_connection
+from services.seed_data import DEMO_STUDENT_ID, seed_demo
+from services.timeutil import now_ist
 
 
 @pytest.fixture()
@@ -71,7 +71,7 @@ def test_seed_is_idempotent_and_relative(seeded):
 
 
 def test_seeded_deadlines_are_plan_able(seeded):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     result = backend.get_upcoming_deadlines(
         student_id=DEMO_STUDENT_ID, days_ahead=7
@@ -84,7 +84,7 @@ def test_seeded_deadlines_are_plan_able(seeded):
 
 
 def test_offline_agent_plans_against_real_backend(seeded):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
     from agent.controller import CampusPilotAgent
     from agent.llm_client import LLMUnavailableError
 

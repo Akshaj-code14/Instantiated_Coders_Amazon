@@ -11,10 +11,10 @@ until the student confirms the new one.
 
 from datetime import datetime, timedelta
 
-from backend.database import get_connection, transaction
-from backend.ids import new_id
-from backend.planner import create_plan_with_details
-from backend.timeutil import now_ist, require_aware, to_iso, to_ist
+from services.database import get_connection, transaction
+from services.ids import new_id
+from services.planner import create_plan_with_details
+from services.timeutil import now_ist, require_aware, to_iso, to_ist
 
 
 def _parse(value: str) -> datetime:

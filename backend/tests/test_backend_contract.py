@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from backend.database import get_connection, init_db, transaction
-from backend.timeutil import IST, now_ist, to_iso
+from services.database import get_connection, init_db, transaction
+from services.timeutil import IST, now_ist, to_iso
 from agent.schemas import ToolResult
 
 
@@ -122,7 +122,7 @@ def _parse(value):
 
 
 def test_read_tools_are_agent_compatible(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     calls = {
@@ -154,7 +154,7 @@ def test_read_tools_are_agent_compatible(seeded_db):
 
 
 def test_plan_respects_due_time_and_returns_blocks(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     result = backend.create_plan(
@@ -180,7 +180,7 @@ def test_plan_respects_due_time_and_returns_blocks(seeded_db):
 
 
 def test_plan_reports_the_lab_conflict(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     result = backend.create_plan(
@@ -212,7 +212,7 @@ def _create_and_confirm(backend, now, task_ids):
 
 
 def test_replan_capacity_diff_and_completed_items(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     plan_id = _create_and_confirm(backend, now, ["task_lab", "task_quiz", "task_java"])
@@ -236,7 +236,7 @@ def test_replan_capacity_diff_and_completed_items(seeded_db):
 
 
 def test_replan_confirmation_succeeds_and_is_idempotent(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     first = _create_and_confirm(backend, now, ["task_quiz"])
@@ -266,7 +266,7 @@ def test_replan_confirmation_succeeds_and_is_idempotent(seeded_db):
 
 
 def test_status_and_checkin_aliases(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     postponed = backend.update_task(
         task_id="task_quiz", status="postponed",
@@ -291,7 +291,7 @@ def test_status_and_checkin_aliases(seeded_db):
 
 
 def test_wellbeing_returns_resources(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     result = backend.get_wellbeing_support(
         student_id=STUDENT, mood=None, risk_flag=True
@@ -303,7 +303,7 @@ def test_wellbeing_returns_resources(seeded_db):
 
 
 def test_active_pending_log_and_ownership(seeded_db):
-    import backend.campuspilot_backend as backend
+    import services.campuspilot_backend as backend
 
     now = seeded_db["now"]
     plan_id = _create_and_confirm(backend, now, ["task_quiz"])

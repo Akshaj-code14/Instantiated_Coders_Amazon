@@ -1,9 +1,9 @@
 
 """Student check-in services for CampusPilot."""
 
-from backend.database import get_connection, transaction
-from backend.ids import new_id
-from backend.timeutil import now_ist, to_iso
+from services.database import get_connection, transaction
+from services.ids import new_id
+from services.timeutil import now_ist, to_iso
 
 
 VALID_COMPLETION_STATUSES = {

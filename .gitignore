@@ -7,3 +7,11 @@ __pycache__/
 !.env.example
 .freebuff/
 .venv311/
+
+# Runtime artifacts — the database is created and seeded on first run.
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# Local verification artifacts
+screenshot-*.png

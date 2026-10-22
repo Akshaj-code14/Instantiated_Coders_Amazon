@@ -7,8 +7,8 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.database import get_connection, transaction
-from backend.timeutil import now_ist, to_iso
+from services.database import get_connection, transaction
+from services.timeutil import now_ist, to_iso
 
 STUDENT = "student_demo"
 

@@ -22,10 +22,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-import backend.campuspilot_backend as backend
+import services.campuspilot_backend as backend
 from agent.config import load_config
-from backend.database import get_connection
-from backend.timeutil import now_ist, to_iso, to_ist
+from services.database import get_connection
+from services.timeutil import now_ist, to_iso, to_ist
 from integration.api_models import (
     ChatRequest,
     ChatResponse,
@@ -59,7 +59,7 @@ from integration.wiring import (
 
 logger = logging.getLogger("campuspilot")
 BASE_DIR = Path(__file__).resolve().parent
-UI_PATH = BASE_DIR / "ui" / "campuspilot_ui.html"
+UI_PATH = BASE_DIR.parent / "frontend" / "campuspilot_ui.html"
 COOKIE_NAME = "campuspilot_session"
 PORT = int((os.getenv("PORT") or "8000").strip() or "8000")
 

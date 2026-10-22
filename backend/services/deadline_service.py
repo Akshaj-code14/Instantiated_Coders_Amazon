@@ -3,9 +3,9 @@
 
 from datetime import datetime, timedelta
 
-from backend.database import get_connection, transaction
-from backend.ids import new_id
-from backend.timeutil import now_ist, require_aware, to_iso
+from services.database import get_connection, transaction
+from services.ids import new_id
+from services.timeutil import now_ist, require_aware, to_iso
 
 
 def create_deadline(

@@ -15,12 +15,12 @@ browser ──► FastAPI (server.py) ──► agent (LLM or quick mode) ──
 ## Quick start
 
 ```bash
-cd campuspilot
 python -m venv .venv && . .venv/Scripts/activate    # Windows (bash)
 pip install -r requirements.txt
 
 cp .env.example .env          # optional; add GEMINI_API_KEY for live AI
-python -m backend.seed_data   # optional; the server also seeds on first run
+cd backend
+python -m services.seed_data  # optional; the server also seeds on first run
 uvicorn server:app --host 127.0.0.1 --port 8000
 ```
 
@@ -35,15 +35,16 @@ configured and `offline` otherwise.
 
 | Path | Role |
 | --- | --- |
-| `server.py` | FastAPI app: serves the UI, the JSON API, and the session cookie. |
-| `integration/wiring.py` | Session registry, per-session agent, `/state` read model, pending-plan lifecycle. |
-| `integration/mappers.py` | Agent tool results → API payloads (plans, diffs, tool chips). |
-| `integration/api_models.py` | Pydantic request/response schemas. |
-| `agent/` | LLM controller, generated tool registry, validators, quick-mode fallback router, prompt. |
-| `backend/` | SQLite schema and domain services (tasks, planner, replanner, notices, check-ins, wellbeing). |
-| `backend/seed_data.py` | Relative-date demo seed; idempotent (skips when data exists). |
-| `ui/campuspilot_ui.html` | The whole front end: dashboard, day timeline, chat, check-in. |
-| `tests/` | Backend contract, API, agent guardrails, seed and end-to-end tests. |
+| `frontend/campuspilot_ui.html` | The whole front end: dashboard, day timeline, chat, check-in, plus the kinetic-grid background, magnetic cursor, floating Pomodoro, radial quick menu and settings drawer. |
+| `backend/server.py` | FastAPI app: serves the UI, the JSON API, and the session cookie. |
+| `backend/integration/wiring.py` | Session registry, per-session agent, `/state` read model, pending-plan lifecycle. |
+| `backend/integration/mappers.py` | Agent tool results → API payloads (plans, diffs, tool chips). |
+| `backend/integration/api_models.py` | Pydantic request/response schemas. |
+| `backend/agent/` | LLM controller, generated tool registry, validators, quick-mode fallback router, prompt. |
+| `backend/services/` | SQLite schema and domain services (tasks, planner, replanner, notices, check-ins, wellbeing). |
+| `backend/services/seed_data.py` | Relative-date demo seed; idempotent (skips when data exists). |
+| `backend/data/` | SQLite database (created on first run) and seed CSVs. |
+| `backend/tests/` | Backend contract, API, agent guardrails, seed and end-to-end tests. |
 
 ## API
 
@@ -114,7 +115,7 @@ model sees cannot drift from what we validate.
 ## Tests
 
 ```bash
-cd campuspilot && python -m pytest -q          # backend, API, agent, e2e, seed
+python -m pytest -q          # backend, API, agent, e2e, seed (from the repo root)
 ```
 
 The suite runs entirely offline against a throwaway SQLite file, so it is safe
