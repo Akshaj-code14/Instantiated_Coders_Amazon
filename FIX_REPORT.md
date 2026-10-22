@@ -472,6 +472,18 @@ Nothing pushed; `main` untouched; no key printed, logged or committed.
   200, `/state` 401 without the cookie.
 - `/demo/reset` in the container: 200, 200, 200, then 429; `/state` back to 6
   tasks, no active/pending plan.
+- Real browser (Chromium, port 8030, offline): the new **Reset demo** header
+  button exists, its click produced `POST /demo/reset → 200`, a
+  `Demo data reset` toast, 6 reseeded tasks and no active plan; every existing
+  header element id (`fallbackBadge`, `alexaModeBtn`, `themeToggleBtn`,
+  `openNewPlanBtn`) is still present and the only console message is the
+  pre-existing Tailwind CDN warning.
+- Fresh clone of this branch (`requirements.txt` only, Python 3.14 venv):
+  **144 passed, 1 skipped**, and the server started exactly as the container
+  does (`uvicorn server:app --host 0.0.0.0 --port $PORT`, key unset) served
+  `/health` (offline, 15 left), `GET /` 200 HTML and a seeded 6-task `/state`.
+- Commits on `deploy-ready`: `8296545`, `79a6b1c`, `35a9196`, `a583893`.
+  No push, `main` untouched.
 
 ## What could not be verified here
 - A real cloud deployment (no host account, no push): the URL is still
