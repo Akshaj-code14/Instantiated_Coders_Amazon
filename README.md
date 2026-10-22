@@ -113,9 +113,16 @@ curl http://127.0.0.1:8000/state      # profile, tasks, timeline, plans, conflic
 python -m pytest -q                  # from the repo root
 ```
 
-The suite (138 tests: backend contract, API, agent guardrails, seed, e2e, manual
-app) runs entirely offline against a throwaway SQLite file — it never calls the
-LLM. Verified on Python 3.11.
+The suite (backend contract, API, agent guardrails, seed, e2e, manual harness)
+runs entirely offline against a throwaway SQLite file — it never calls the LLM.
+
+- Full dev install (`requirements.txt` + `requirements-manual.txt`, Python
+  **3.11**): **138 passed**.
+- Fresh clone with `requirements.txt` only (Python **3.14**): **127 passed,
+  1 skipped** — the Streamlit manual harness is an optional extra, so its file
+  skips instead of breaking collection.
+
+Both runs were executed from a fresh `git clone` in a clean virtualenv.
 
 ## Demo prompts
 

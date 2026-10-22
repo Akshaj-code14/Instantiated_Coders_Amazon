@@ -165,3 +165,23 @@ user bubble showed the stripped text, proposal modal opened, and
   entry points covered by their own tests; tracked, kept.
 - No `Backend_old/` and no `check_db.py` exist in the tree, and `git log
   --all --diff-filter=A` shows they were **never** committed.
+
+### Fresh-clone proof (ran, from a temp directory)
+
+```
+git clone -b submission-fixes . "$TEMP/campuspilot-proof"   # HEAD 0e8b9d9
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt  # exit 0
+cp .env.example .env
+.venv/Scripts/python.exe -m pytest -q                        # 127 passed, 1 skipped
+cd backend && ../.venv/Scripts/python.exe -m uvicorn server:app --host 127.0.0.1 --port 8000
+```
+- `/health` → `{"status":"ok","llm":"offline","db":"ok"}` (offline, empty key),
+  `/state` → 6 tasks, `/` → `200 text/html`, `python -m services.seed_data` →
+  idempotent (`seeded: False … already contains students`).
+- **The first proof run FAILED** (this is why there is a second item-3 commit):
+  `backend/tests/test_manual_app.py` crashed pytest *collection* on a clean
+  install because `requirements.txt` keeps Streamlit optional. Fixed with
+  `pytest.importorskip("streamlit")` before the `agent.manual_app` import.
+  Re-proved: 127 passed / 1 skipped on the clean clone; **138 passed** in the
+  full dev venv (Python 3.11) where `requirements-manual.txt` is installed.
