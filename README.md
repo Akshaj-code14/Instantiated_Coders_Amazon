@@ -89,7 +89,7 @@ cp .env.example .env
 
 ## Live demo
 
-**URL:** `https://campus-pilot-ss2y.onrender.com/` — TEAM Instantiated Coders once the host gives you one.
+**URL:** <https://campus-pilot-ss2y.onrender.com/> — TEAM Instantiated Coders once the host gives you one.
 
 The live instance runs the same code in quick mode, key is configured.
 It is a **shared single demo student**: every visitor sees and edits the same
